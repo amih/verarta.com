@@ -1,0 +1,6 @@
+# Ignore config files during build
+config/
+hyperion/
+scripts/
+join-node/
+*.md

@@ -1,0 +1,37 @@
+{
+  "initial_key": "EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV",
+  "producers": [
+    {
+      "name": "producer1",
+      "pvt": "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3",
+      "pub": "EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV"
+    },
+    {
+      "name": "producer2",
+      "pvt": "GENERATE_WITH_SCRIPT",
+      "pub": "GENERATE_WITH_SCRIPT"
+    },
+    {
+      "name": "producer3",
+      "pvt": "GENERATE_WITH_SCRIPT",
+      "pub": "GENERATE_WITH_SCRIPT"
+    },
+    {
+      "name": "producer4",
+      "pvt": "GENERATE_WITH_SCRIPT",
+      "pub": "GENERATE_WITH_SCRIPT"
+    }
+  ],
+  "users": [
+    {
+      "name": "verartacore",
+      "pvt": "GENERATE_WITH_SCRIPT",
+      "pub": "GENERATE_WITH_SCRIPT"
+    },
+    {
+      "name": "testuser1",
+      "pvt": "GENERATE_WITH_SCRIPT",
+      "pub": "GENERATE_WITH_SCRIPT"
+    }
+  ]
+}

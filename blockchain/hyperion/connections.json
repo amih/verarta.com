@@ -1,0 +1,46 @@
+{
+  "amqp": {
+    "host": "rabbitmq:5672",
+    "api": "rabbitmq:15672",
+    "protocol": "http",
+    "user": "rabbitmq",
+    "pass": "rabbitmq",
+    "vhost": "hyperion",
+    "frameMax": "0x10000"
+  },
+  "elasticsearch": {
+    "protocol": "http",
+    "host": "elasticsearch:9200",
+    "ingest_nodes": ["elasticsearch:9200"],
+    "user": "",
+    "pass": ""
+  },
+  "redis": {
+    "host": "redis",
+    "port": 6379
+  },
+  "mongodb": {
+    "enabled": true,
+    "host": "mongodb",
+    "port": 27017,
+    "database_prefix": "hyperion",
+    "user": "",
+    "pass": ""
+  },
+  "chains": {
+    "verarta": {
+      "name": "Verarta",
+      "chain_id": "REPLACE_WITH_CHAIN_ID_FROM_GENESIS",
+      "http": "http://history:8888",
+      "ship": [
+        {
+          "label": "primary",
+          "url": "ws://history:8080"
+        }
+      ],
+      "WS_ROUTER_HOST": "0.0.0.0",
+      "WS_ROUTER_PORT": 7001,
+      "control_port": 7002
+    }
+  }
+}

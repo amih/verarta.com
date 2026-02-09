@@ -1,0 +1,296 @@
+version: '3.8'
+
+services:
+  # ──────────────────────────────────────────────────────────────
+  # Block Producer Nodes (4 nodes)
+  # ──────────────────────────────────────────────────────────────
+
+  producer1:
+    image: verarta/spring:latest
+    container_name: verarta-producer1
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "8000:8888"    # Chain API
+      - "9000:9876"    # P2P
+    volumes:
+      - ./blockchain/genesis.json:/config/genesis.json:ro
+      - ./blockchain/config/producer1.ini:/config/config.ini:ro
+      - producer1-data:/data
+    networks:
+      - verarta-net
+    restart: unless-stopped
+
+  producer2:
+    image: verarta/spring:latest
+    container_name: verarta-producer2
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "8001:8888"
+      - "9001:9876"
+    volumes:
+      - ./blockchain/genesis.json:/config/genesis.json:ro
+      - ./blockchain/config/producer2.ini:/config/config.ini:ro
+      - producer2-data:/data
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    depends_on:
+      - producer1
+
+  producer3:
+    image: verarta/spring:latest
+    container_name: verarta-producer3
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "8002:8888"
+      - "9002:9876"
+    volumes:
+      - ./blockchain/genesis.json:/config/genesis.json:ro
+      - ./blockchain/config/producer3.ini:/config/config.ini:ro
+      - producer3-data:/data
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    depends_on:
+      - producer1
+
+  producer4:
+    image: verarta/spring:latest
+    container_name: verarta-producer4
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "8003:8888"
+      - "9003:9876"
+    volumes:
+      - ./blockchain/genesis.json:/config/genesis.json:ro
+      - ./blockchain/config/producer4.ini:/config/config.ini:ro
+      - producer4-data:/data
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    depends_on:
+      - producer1
+
+  # ──────────────────────────────────────────────────────────────
+  # Full History Node
+  # ──────────────────────────────────────────────────────────────
+
+  history:
+    image: verarta/spring:latest
+    container_name: verarta-history
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "8888:8888"    # Chain API (main endpoint)
+      - "9004:9876"    # P2P
+      - "8080:8080"    # State History (SHiP)
+    volumes:
+      - ./blockchain/genesis.json:/config/genesis.json:ro
+      - ./blockchain/config/history.ini:/config/config.ini:ro
+      - history-data:/data
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    depends_on:
+      - producer1
+      - producer2
+      - producer3
+      - producer4
+
+  # ──────────────────────────────────────────────────────────────
+  # Hyperion Infrastructure
+  # ──────────────────────────────────────────────────────────────
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: verarta-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    container_name: verarta-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: verarta-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_PASS: rabbitmq
+      RABBITMQ_DEFAULT_VHOST: hyperion
+    ports:
+      - "5672:5672"      # AMQP
+      - "15672:15672"    # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  mongodb:
+    image: mongo:8
+    container_name: verarta-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ──────────────────────────────────────────────────────────────
+  # PostgreSQL (User Database)
+  # ──────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: verarta-postgres
+    environment:
+      POSTGRES_DB: verarta
+      POSTGRES_USER: verarta
+      POSTGRES_PASSWORD: verarta
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verarta"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────────────────────
+  # Hyperion Indexer + API (commented out - requires custom build)
+  # ──────────────────────────────────────────────────────────────
+
+  # hyperion-indexer:
+  #   image: verarta/hyperion:latest
+  #   container_name: verarta-hyperion-indexer
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #     mongodb:
+  #       condition: service_healthy
+  #     history:
+  #       condition: service_started
+  #   volumes:
+  #     - ./blockchain/hyperion/config:/hyperion-history-api/chains:ro
+  #     - ./blockchain/hyperion/connections.json:/hyperion-history-api/connections.json:ro
+  #   networks:
+  #     - verarta-net
+  #   restart: unless-stopped
+  #   command: ./run.sh verarta-indexer
+
+  # hyperion-api:
+  #   image: verarta/hyperion:latest
+  #   container_name: verarta-hyperion-api
+  #   depends_on:
+  #     - hyperion-indexer
+  #   ports:
+  #     - "7000:7000"
+  #   volumes:
+  #     - ./blockchain/hyperion/config:/hyperion-history-api/chains:ro
+  #     - ./blockchain/hyperion/connections.json:/hyperion-history-api/connections.json:ro
+  #   networks:
+  #     - verarta-net
+  #   restart: unless-stopped
+  #   command: ./run.sh verarta-api
+
+  # ──────────────────────────────────────────────────────────────
+  # Wallet (keosd) — for development and bootstrap only
+  # ──────────────────────────────────────────────────────────────
+
+  wallet:
+    image: verarta/spring:latest
+    container_name: verarta-wallet
+    entrypoint: ["keosd"]
+    command: >
+      --http-server-address=0.0.0.0:8888
+      --unlock-timeout=999999999
+      --wallet-dir=/wallet
+    ports:
+      - "6666:8888"
+    volumes:
+      - wallet-data:/wallet
+    networks:
+      - verarta-net
+    restart: unless-stopped
+
+volumes:
+  producer1-data:
+  producer2-data:
+  producer3-data:
+  producer4-data:
+  history-data:
+  es-data:
+  redis-data:
+  rabbitmq-data:
+  mongo-data:
+  postgres-data:
+  wallet-data:
+
+networks:
+  verarta-net:
+    driver: bridge
