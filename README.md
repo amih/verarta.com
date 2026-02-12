@@ -15,14 +15,14 @@ A full-stack blockchain application for registering and managing artwork on a pr
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Verarta Application                      │
+│                     Verarta Application                     │
 ├─────────────────────────────────────────────────────────────┤
 │ Frontend (React + WebAuthn) → Astro SSR Backend             │
-│                         ↓                                    │
+│                         ↓                                   │
 │              PostgreSQL (users) + Redis (cache)             │
-│                         ↓                                    │
-│   Antelope Blockchain (4 producers + 1 history node)       │
-│                         ↓                                    │
+│                         ↓                                   │
+│   Antelope Blockchain (4 producers + 1 history node)        │
+│                         ↓                                   │
 │        Hyperion (Elasticsearch + RabbitMQ + MongoDB)        │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -148,104 +148,99 @@ The frontend is integrated into Astro as islands, so it runs with the backend de
 
 - **Ubuntu 22.04** server with at least:
   - 32 GB RAM (64 GB recommended)
-  - 500 GB SSD
+  - 500 GB SSD minimum (1TB+ recommended)
   - 8 CPU cores
-- **Domain name** pointed to server IP
-- **SSL certificate** (via Let's Encrypt)
+- **Domain name** pointed to server IP (A records for verarta.com, www, chain, explorer, hyperion)
+- **SSH access** to server
+- **Clean server** (or run cleanup script first)
 
-### 1. Server Setup
+### Quick Start: One-Command Deployment
+
+The easiest way to deploy Verarta is with our automated deployment script:
 
 ```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
+# 1. SSH to your server
+ssh user@verarta.com
 
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+# 2. Clone the repository
+git clone https://github.com/yourusername/verarta.com.git
+cd verarta.com
 
-# Install Docker Compose
-sudo apt install docker-compose-plugin
-
-# Install Nginx
-sudo apt install nginx certbot python3-certbot-nginx
-
-# Install Node.js (for backend)
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Install PM2 (process manager)
-sudo npm install -g pm2
+# 3. Run the deployment script - that's it!
+bash deploy-production.sh
 ```
 
-### 2. SSL Certificates
+**What this does:**
+- ✅ Checks and installs prerequisites (Docker, Node.js, Nginx, PM2, Certbot)
+- ✅ Builds Spring Docker image (~2 hours)
+- ✅ Configures environment with auto-generated secrets
+- ✅ Starts all blockchain services (4 producers + history node)
+- ✅ Bootstraps blockchain with system accounts
+- ✅ Builds and starts backend with PM2
+- ✅ Configures Nginx reverse proxy
+- ✅ Optionally sets up SSL certificates
+- ✅ Configures services to start on boot
+
+**Time estimate:** ~2.5 hours (mostly waiting for Docker build)
+
+### Manual Deployment (Advanced)
+
+For more control over the deployment process, see the detailed guide:
+
+**[deployment/DEPLOYMENT_GUIDE.md](deployment/DEPLOYMENT_GUIDE.md)**
+
+### Optional: Clean Server First
+
+If your server has existing applications, clean it first:
 
 ```bash
-# Get Let's Encrypt certificates
-sudo certbot --nginx -d verarta.com -d www.verarta.com \
-  -d explorer.verarta.com -d chain.verarta.com \
-  -d hyperion.verarta.com -d registry.verarta.com
+# On server
+git clone https://github.com/yourusername/verarta.com.git
+cd verarta.com
+
+# Audit what's installed
+bash deployment/check-server.sh
+
+# Clean everything (prompts for confirmation)
+sudo bash deployment/cleanup-server.sh
+
+# Then run deployment
+bash deploy-production.sh
 ```
 
-### 3. Deploy Blockchain
+### Post-Deployment: Verify Everything Works
 
 ```bash
-# Clone repo
-git clone https://github.com/yourusername/verarta.com.git /opt/verarta
-cd /opt/verarta
+# Check all services are running
+docker compose ps
+pm2 status
 
-# Build and start blockchain
-docker compose up -d
+# Test blockchain
+curl http://localhost:8888/v1/chain/get_info
 
-# Bootstrap chain
-python3 blockchain/scripts/bootstrap.py
+# Test backend
+curl https://verarta.com
+
+# View logs
+pm2 logs verarta-backend
+docker compose logs -f producer1
 ```
 
-### 4. Deploy Backend
+### Updating Your Deployment
+
+To update your production deployment with new code:
 
 ```bash
-# Set up git deployment
-cd /opt/verarta
-git init --bare repo.git
+# SSH to server
+ssh user@verarta.com
+cd verarta.com
 
-# Install post-receive hook
-cp deployment/post-receive repo.git/hooks/
-chmod +x repo.git/hooks/post-receive
+# Pull latest changes
+git pull
 
-# On your dev machine, add production remote
-git remote add prod ssh://user@verarta.com/opt/verarta/repo.git
-
-# Deploy
-git push prod main
-```
-
-The post-receive hook will:
-1. Check out code to `/opt/verarta/app`
-2. Install dependencies (`npm ci`)
-3. Build backend (`npm run build`)
-4. Restart via PM2 (`pm2 restart verarta-backend`)
-
-### 5. Configure Nginx
-
-```bash
-# Copy Nginx config
-sudo cp nginx/verarta.com.conf /etc/nginx/sites-available/
-sudo ln -s /etc/nginx/sites-available/verarta.com.conf /etc/nginx/sites-enabled/
-
-# Test and reload
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### 6. Start Services
-
-```bash
-# Start backend with PM2
-cd /opt/verarta/app/backend
-pm2 start dist/server/entry.mjs --name verarta-backend
-
-# Save PM2 config
-pm2 save
-pm2 startup
+# Restart services
+docker compose restart
+pm2 restart verarta-backend
 ```
 
 ---

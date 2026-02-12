@@ -1,0 +1,17 @@
+services:
+  # Heavy services on cores 0-3
+  elasticsearch: { cpuset: "0-3" }
+  mongodb: { cpuset: "0-3" }
+  postgres: { cpuset: "0-3" }
+
+  # Blockchain nodes on cores
+  producer1: { cpuset: "4-6" }
+  producer2: { cpuset: "4-6" }
+  producer3: { cpuset: "4-6" }
+  producer4: { cpuset: "4-6" }
+  history: { cpuset: "4-6" }
+
+  # Lightweight services on cores 6-7
+  redis: { cpuset: "6-7" }
+  rabbitmq: { cpuset: "6-7" }
+  wallet: { cpuset: "6-7" }

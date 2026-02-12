@@ -36,6 +36,12 @@ RUN git clone --recursive https://github.com/AntelopeIO/spring.git . \
     && git checkout ${SPRING_VERSION} \
     && git submodule update --init --recursive
 
+# Debug: Show the original lines
+RUN echo "=== Original config.hpp lines ===" \
+ && grep "block_interval_ms" libraries/chain/include/eosio/chain/config.hpp || true \
+ && grep "producer_repetitions" libraries/chain/include/eosio/chain/config.hpp || true \
+ && grep "default_max_inline_action_size" libraries/chain/include/eosio/chain/config.hpp || true
+
 # Patch config.hpp for custom block interval and limits
 RUN sed -i \
     "s/block_interval_ms = 500;/block_interval_ms = ${BLOCK_INTERVAL_MS};/" \
@@ -44,14 +50,19 @@ RUN sed -i \
     "s/producer_repetitions = 12;/producer_repetitions = ${PRODUCER_REPETITIONS};/" \
     libraries/chain/include/eosio/chain/config.hpp \
  && sed -i \
-    "s/default_max_inline_action_size = 512 \* 1024;/default_max_inline_action_size = ${MAX_INLINE_ACTION_SIZE};/" \
+    "s/default_max_inline_action_size.*= 512 \\* 1024;/default_max_inline_action_size               = ${MAX_INLINE_ACTION_SIZE};/" \
     libraries/chain/include/eosio/chain/config.hpp
+
+# Patch test files to match the new block interval
+RUN sed -i \
+    "s/block_interval_ms == 500/block_interval_ms == ${BLOCK_INTERVAL_MS}/" \
+    plugins/producer_plugin/test/test_block_timing_util.cpp
 
 # Verify patches applied
 RUN echo "=== Verifying config.hpp patches ===" \
  && grep "block_interval_ms = ${BLOCK_INTERVAL_MS}" libraries/chain/include/eosio/chain/config.hpp \
  && grep "producer_repetitions = ${PRODUCER_REPETITIONS}" libraries/chain/include/eosio/chain/config.hpp \
- && grep "default_max_inline_action_size = ${MAX_INLINE_ACTION_SIZE}" libraries/chain/include/eosio/chain/config.hpp \
+ && grep "default_max_inline_action_size.*= ${MAX_INLINE_ACTION_SIZE}" libraries/chain/include/eosio/chain/config.hpp \
  && echo "=== Patches verified ==="
 
 # Build Spring
@@ -64,7 +75,7 @@ RUN mkdir -p build && cd build \
     && make install
 
 # Verify binaries built successfully
-RUN nodeos --version && cleos --version && keosd --version
+RUN nodeos --version && cleos version client && keosd --version
 
 # ──────────────────────────────────────────────────────────────
 # Stage 2: Runtime image (minimal)
