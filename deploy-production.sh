@@ -306,6 +306,9 @@ fi
 log_info "Generating blockchain accounts..."
 python3 blockchain/scripts/generate-accounts.py
 
+log_info "Updating producer configs with generated keys..."
+python3 blockchain/scripts/update-producer-configs.py
+
 log_info "Running bootstrap script..."
 python3 blockchain/scripts/bootstrap.py
 
