@@ -99,7 +99,7 @@ I've analyzed the Verarta blockchain art registry codebase and designed a compre
     This key is protected by your fingerprint/Face ID."
 ```
 
-#### B. File Upload with Encryption
+#### B. File Upload with Encryption (with Admin Key Escrow)
 
 ```
 1. User selects file in browser (EXISTING: CreateArtwork.tsx)
@@ -110,14 +110,17 @@ I've analyzed the Verarta blockchain art registry codebase and designed a compre
       - For each chunk: encrypt with DEK + unique nonce
       - Store encrypted chunks in memory
    c. Encrypt DEK with user's public encryption key (X25519)
-   d. Calculate hash of ENCRYPTED data (not plaintext)
+   d. Fetch admin public key from blockchain
+   e. Encrypt same DEK with admin's public encryption key (X25519)
+   f. Calculate hash of ENCRYPTED data (not plaintext)
 
 3. Upload metadata to backend (MODIFIED):
    POST /api/artworks/upload-start
    {
      artwork_id,
      file: encrypted_file,
-     encrypted_dek: base64(encrypted_dek),
+     encrypted_dek_user: base64(encrypted_dek_for_user),
+     encrypted_dek_admin: base64(encrypted_dek_for_admin),
      encryption_nonce: base64(nonce),
      is_encrypted: true,
      original_size: number (plaintext size for display)
@@ -128,9 +131,11 @@ I've analyzed the Verarta blockchain art registry codebase and designed a compre
 5. Upload encrypted chunks to blockchain (EXISTING flow)
    - Chunks already encrypted, no backend processing needed
 
-6. Store encrypted DEK on-chain (NEW):
-   - Modify addfile action to accept encrypted_dek field
-   - Store encrypted_dek in artfiles table
+6. Store BOTH encrypted DEKs on-chain (NEW):
+   - Modify addfile action to accept encrypted_dek_user and encrypted_dek_admin
+   - Store both in artfiles table
+   - User can decrypt with their key
+   - Admin can decrypt with admin key (for moderation/support)
 ```
 
 #### C. File Retrieval and Decryption
@@ -144,7 +149,8 @@ I've analyzed the Verarta blockchain art registry codebase and designed a compre
 3. Backend returns encrypted data + metadata:
    {
      encrypted_data: Buffer,
-     encrypted_dek: string,
+     encrypted_dek_user: string,    // DEK encrypted for user
+     encrypted_dek_admin: string,   // DEK encrypted for admin (optional)
      encryption_nonce: string,
      is_encrypted: boolean,
      mime_type: string,
@@ -153,10 +159,17 @@ I've analyzed the Verarta blockchain art registry codebase and designed a compre
 
 4. CLIENT-SIDE DECRYPTION (NEW):
    a. Retrieve user's private encryption key from IndexedDB
-   b. Decrypt DEK using private key
+   b. Decrypt DEK using private key (uses encrypted_dek_user)
    c. Decrypt file chunks with AES-256-GCM using decrypted DEK
    d. Verify integrity (hash check on decrypted data)
    e. Display/download decrypted file
+
+5. ADMIN DECRYPTION (if admin viewing):
+   a. Admin retrieves their private encryption key from secure storage
+   b. Decrypt DEK using admin private key (uses encrypted_dek_admin)
+   c. Decrypt file chunks with AES-256-GCM using decrypted DEK
+   d. Display/download decrypted file
+   e. Log admin access for audit trail
 ```
 
 ### 4. Multi-Device Key Sharing
@@ -196,7 +209,107 @@ I've analyzed the Verarta blockchain art registry codebase and designed a compre
    - Can now decrypt all user files
 ```
 
-### 5. Key Recovery System (Social Recovery)
+### 5. Admin Key Escrow (Platform Access)
+
+**Purpose**: Allow platform administrators to decrypt files for content moderation, legal compliance, and user support.
+
+**How It Works:**
+- Platform has a single master admin encryption key pair
+- Admin public key stored on-chain (readable by all)
+- Admin private key stored securely (HSM or secure key management system)
+- Every encrypted file has DEK encrypted with BOTH user key AND admin key
+- Admin can decrypt any file using their private key
+- All admin decryptions are logged for audit trail
+
+**Admin Key Management:**
+
+```
+1. Initial Setup (one-time, during deployment):
+   - Generate admin X25519 key pair on secure system
+   - Store admin public key on-chain via smart contract action
+   - Store admin private key in Hardware Security Module (HSM) or secure vault
+   - Require multi-signature approval for admin key usage
+
+2. Admin Key Storage:
+   - Private key NEVER leaves HSM/secure environment
+   - Decryption happens server-side in isolated environment
+   - Multi-factor authentication required for admin access
+   - All operations logged with timestamp, admin ID, file ID
+
+3. Admin Key Rotation (annual or as needed):
+   - Generate new admin key pair
+   - Background job re-encrypts all file DEKs with new admin key
+   - Old admin key archived but not deleted (for historical files)
+   - Rotation logged on blockchain for transparency
+```
+
+**Use Cases:**
+1. **Content Moderation**: Review flagged content for policy violations
+2. **Legal Compliance**: Respond to valid legal requests (DMCA, court orders)
+3. **User Support**: Assist users who lost access to their files
+4. **Platform Security**: Detect and remove malicious content
+5. **Emergency Access**: Recover files in critical situations
+
+**Admin Decryption Flow:**
+
+```
+1. Admin requests file access:
+   POST /api/admin/decrypt-file
+   {
+     file_id: number,
+     reason: string,  // "content_moderation", "legal_request", "user_support"
+     ticket_id: string  // reference to support ticket or legal case
+   }
+   - Requires admin authentication + 2FA
+   - Logs request with reason
+
+2. Backend retrieves file metadata from blockchain:
+   - Get encrypted_dek_admin from artfiles table
+   - Get encrypted chunks from Hyperion
+
+3. Backend calls HSM/secure service:
+   POST https://secure-hsm.internal/decrypt-dek
+   {
+     encrypted_dek_admin: string,
+     file_id: number,
+     admin_id: string,
+     reason: string
+   }
+   - HSM verifies admin permissions
+   - HSM decrypts DEK using admin private key
+   - Returns decrypted DEK (never exposes private key)
+
+4. Backend decrypts file:
+   - Use decrypted DEK to decrypt file chunks
+   - Assemble complete file
+   - Return to admin interface
+
+5. Audit log entry created:
+   - Timestamp
+   - Admin user ID
+   - File ID and owner
+   - Reason for access
+   - IP address
+   - Result (success/failure)
+```
+
+**Security Considerations:**
+
+- **Transparency**: All admin decryptions logged on blockchain (optional: public audit trail)
+- **Access Control**: Admin key usage requires multiple signatures
+- **Rate Limiting**: Admins can only decrypt limited number of files per day
+- **Notification**: Users notified when admin accesses their files (unless legal hold prevents it)
+- **Key Rotation**: Admin keys rotated annually
+- **Audit Trail**: Immutable log of all admin access
+- **Legal Framework**: Admin access policy documented and legally reviewed
+
+**Privacy vs. Moderation Balance:**
+- Users informed during signup that admin escrow exists
+- Transparency report published quarterly (number of admin accesses)
+- Admin access only used for legitimate purposes
+- Users can download audit log of admin access to their files
+
+### 6. Social Recovery System (User Key Recovery)
 
 **Implementation of TODO #1**: "2 out of friends and family can help reset"
 
@@ -227,7 +340,24 @@ I've analyzed the Verarta blockchain art registry codebase and designed a compre
    h. User regains access to encrypted files
 ```
 
-### 6. Smart Contract Modifications
+### 7. Smart Contract Modifications
+
+#### New Table: `adminkeys`
+
+```cpp
+struct [[eosio::table]] adminkey {
+  uint64_t      id;              // primary key
+  std::string   pubkey;          // Admin X25519 public key (base64)
+  uint64_t      created_at;      // timestamp
+  uint64_t      expires_at;      // expiry for key rotation
+  bool          is_active;       // current active key
+  std::string   key_version;     // e.g., "v1", "v2" for rotation tracking
+
+  uint64_t primary_key() const { return id; }
+};
+
+typedef eosio::multi_index<"adminkeys"_n, adminkey> adminkeys_table;
+```
 
 #### New Table: `encryptkeys`
 
@@ -268,11 +398,13 @@ struct [[eosio::table]] artfile {
   // ... existing fields ...
 
   // NEW FIELDS:
-  bool          is_encrypted;     // true if file is encrypted
-  std::string   encrypted_dek;    // encrypted data encryption key
-  std::string   encryption_nonce; // nonce for decryption
-  uint64_t      plaintext_size;   // original unencrypted size
-  std::string   encryption_algo;  // "AES-256-GCM+X25519"
+  bool          is_encrypted;         // true if file is encrypted
+  std::string   encrypted_dek_user;   // DEK encrypted for user
+  std::string   encrypted_dek_admin;  // DEK encrypted for admin (key escrow)
+  std::string   encryption_nonce;     // nonce for decryption
+  uint64_t      plaintext_size;       // original unencrypted size
+  std::string   encryption_algo;      // "AES-256-GCM+X25519"
+  std::string   admin_key_version;    // which admin key was used (for rotation)
 
   // existing fields
   uint64_t      id;
@@ -293,6 +425,18 @@ struct [[eosio::table]] artfile {
 #### New Actions
 
 ```cpp
+// Admin key management (contract authority only)
+ACTION setadminkey(
+  std::string pubkey,
+  std::string key_version,
+  uint64_t expires_at
+);
+
+ACTION revokeadminkey(
+  uint64_t key_id
+);
+
+// User encryption keys
 ACTION addencryptkey(
   name owner,
   std::string pubkey,
@@ -304,6 +448,7 @@ ACTION revokekey(
   uint64_t key_id
 );
 
+// Guardian recovery
 ACTION addguardian(
   name owner,
   name guardian_account,
@@ -326,26 +471,83 @@ ACTION recoverkey(
 #### Modified Actions
 
 ```cpp
-// Modified to accept encryption metadata
+// Modified to accept encryption metadata with admin escrow
 ACTION addfile(
   name owner,
   uint64_t artwork_id,
   string filename,
   string mime_type,
-  uint64_t file_size,           // encrypted size
-  string file_hash,             // hash of encrypted data
+  uint64_t file_size,             // encrypted size
+  string file_hash,               // hash of encrypted data
   uint32_t chunk_count,
   bool is_thumbnail,
   // NEW PARAMETERS:
   bool is_encrypted,
-  string encrypted_dek,         // empty if not encrypted
+  string encrypted_dek_user,      // DEK encrypted for user
+  string encrypted_dek_admin,     // DEK encrypted for admin (empty if not encrypted)
   string encryption_nonce,
-  uint64_t plaintext_size,      // 0 if not encrypted
-  string encryption_algo
+  uint64_t plaintext_size,        // 0 if not encrypted
+  string encryption_algo,
+  string admin_key_version        // which admin key was used
 );
 ```
 
-### 7. Frontend Implementation
+#### New Table: `admin_access_log`
+
+```cpp
+struct [[eosio::table]] adminaccess {
+  uint64_t      id;              // primary key
+  uint64_t      file_id;         // file that was accessed
+  name          file_owner;      // owner of the file
+  name          admin_account;   // admin who accessed
+  std::string   reason;          // "moderation", "legal", "support"
+  std::string   ticket_id;       // reference ID
+  uint64_t      accessed_at;     // timestamp
+
+  uint64_t primary_key() const { return id; }
+  uint64_t by_file() const { return file_id; }
+  uint64_t by_admin() const { return admin_account.value; }
+  uint64_t by_owner() const { return file_owner.value; }
+};
+
+typedef eosio::multi_index<
+  "adminaccess"_n,
+  adminaccess,
+  indexed_by<"byfile"_n, const_mem_fun<adminaccess, uint64_t, &adminaccess::by_file>>,
+  indexed_by<"byadmin"_n, const_mem_fun<adminaccess, uint64_t, &adminaccess::by_admin>>,
+  indexed_by<"byowner"_n, const_mem_fun<adminaccess, uint64_t, &adminaccess::by_owner>>
+> adminaccess_table;
+```
+
+#### New Action: Log Admin Access
+
+```cpp
+ACTION logadminaccess(
+  uint64_t file_id,
+  name file_owner,
+  name admin_account,
+  std::string reason,
+  std::string ticket_id
+) {
+  require_auth(admin_account);
+
+  // Verify admin_account has admin permissions
+  // (check against admin accounts table)
+
+  adminaccess_table logs(get_self(), get_self().value);
+  logs.emplace(admin_account, [&](auto& row) {
+    row.id = logs.available_primary_key();
+    row.file_id = file_id;
+    row.file_owner = file_owner;
+    row.admin_account = admin_account;
+    row.reason = reason;
+    row.ticket_id = ticket_id;
+    row.accessed_at = current_time_point().sec_since_epoch();
+  });
+}
+```
+
+### 8. Frontend Implementation
 
 #### New Files to Create
 
