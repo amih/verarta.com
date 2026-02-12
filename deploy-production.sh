@@ -42,9 +42,17 @@ log_error() {
 # Step 1: Check if running as root
 # ============================================================================
 if [[ $EUID -eq 0 ]]; then
-   log_error "Do not run this script as root (don't use sudo)"
-   log_info "The script will ask for sudo when needed"
+   log_error "Please do NOT run this script with sudo"
+   log_info "Run as normal user: bash deploy-production.sh"
+   log_info "The script will prompt for sudo when needed"
    exit 1
+fi
+
+# Check if user can sudo
+if ! sudo -n true 2>/dev/null; then
+    log_info "This script needs sudo access for some operations"
+    log_info "You will be prompted for your password when needed"
+    echo ""
 fi
 
 # ============================================================================

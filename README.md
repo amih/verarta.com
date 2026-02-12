@@ -167,6 +167,7 @@ git clone https://github.com/yourusername/verarta.com.git
 cd verarta.com
 
 # 3. Run the deployment script - that's it!
+# DO NOT use sudo - run as normal user
 bash deploy-production.sh
 ```
 
