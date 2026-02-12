@@ -140,7 +140,7 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
     read -p "Install missing dependencies? (yes/no): " -r
     if [[ $REPLY =~ ^[Yy]es$ ]] || [[ $REPLY =~ ^[Yy]$ ]]; then
         log_info "Installing prerequisites..."
-        bash "$SCRIPT_DIR/deployment/setup-server.sh"
+        sudo bash "$SCRIPT_DIR/deployment/setup-server.sh"
 
         log_success "Prerequisites installed!"
         log_warning "Please log out and log back in for group changes to take effect"
