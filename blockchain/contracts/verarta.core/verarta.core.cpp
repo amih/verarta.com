@@ -37,7 +37,7 @@ void verartatoken::createart(
       row.description_encrypted = description_encrypted;
       row.metadata_encrypted = metadata_encrypted;
       row.creator_public_key = creator_public_key;
-      row.created_at = current_block_time().to_time_point().sec_since_epoch();
+      row.created_at = eosio::current_block_time().to_time_point().sec_since_epoch();
       row.file_count = 0;
    });
 }
@@ -107,7 +107,7 @@ void verartatoken::addfile(
       row.total_chunks = 0;
       row.uploaded_chunks = 0;
       row.upload_complete = false;
-      row.created_at = current_block_time().to_time_point().sec_since_epoch();
+      row.created_at = eosio::current_block_time().to_time_point().sec_since_epoch();
       row.completed_at = 0;
    });
 
@@ -161,7 +161,7 @@ void verartatoken::uploadchunk(
       row.chunk_index = chunk_index;
       row.chunk_data = chunk_data;
       row.chunk_size = chunk_size;
-      row.uploaded_at = current_block_time().to_time_point().sec_since_epoch();
+      row.uploaded_at = eosio::current_block_time().to_time_point().sec_since_epoch();
    });
 
    // Increment uploaded_chunks counter
@@ -196,7 +196,7 @@ void verartatoken::completefile(
    artfiles.modify(file_itr, owner, [&](auto& row) {
       row.total_chunks = total_chunks;
       row.upload_complete = true;
-      row.completed_at = current_block_time().to_time_point().sec_since_epoch();
+      row.completed_at = eosio::current_block_time().to_time_point().sec_since_epoch();
    });
 }
 
@@ -223,7 +223,7 @@ void verartatoken::setquota(
    usagequotas_table quotas(get_self(), get_self().value);
    auto quota_itr = quotas.find(account.value);
 
-   uint64_t current_time = current_block_time().to_time_point().sec_since_epoch();
+   uint64_t current_time = eosio::current_block_time().to_time_point().sec_since_epoch();
    uint64_t daily_reset = (current_time / 86400) * 86400 + 86400; // Next midnight UTC
    uint64_t weekly_reset = calculate_next_monday(current_time);
 
@@ -289,7 +289,7 @@ void verartatoken::addadminkey(
       row.admin_account = admin_account;
       row.public_key = public_key;
       row.description = description;
-      row.added_at = current_block_time().to_time_point().sec_since_epoch();
+      row.added_at = eosio::current_block_time().to_time_point().sec_since_epoch();
       row.is_active = true;
    });
 }
@@ -355,7 +355,7 @@ void verartatoken::logaccess(
       row.admin_account = admin_account;
       row.file_id = file_id;
       row.reason = reason;
-      row.accessed_at = current_block_time().to_time_point().sec_since_epoch();
+      row.accessed_at = eosio::current_block_time().to_time_point().sec_since_epoch();
    });
 }
 
@@ -405,7 +405,7 @@ void verartatoken::check_and_update_quota(name account, uint64_t file_size) {
 
    // If no quota exists, apply default free tier limits
    if (quota_itr == quotas.end()) {
-      uint64_t current_time = current_block_time().to_time_point().sec_since_epoch();
+      uint64_t current_time = eosio::current_block_time().to_time_point().sec_since_epoch();
       uint64_t daily_reset = (current_time / 86400) * 86400 + 86400;
       uint64_t weekly_reset = calculate_next_monday(current_time);
 
@@ -427,7 +427,7 @@ void verartatoken::check_and_update_quota(name account, uint64_t file_size) {
    }
 
    // Check if quotas need to be reset
-   uint64_t current_time = current_block_time().to_time_point().sec_since_epoch();
+   uint64_t current_time = eosio::current_block_time().to_time_point().sec_since_epoch();
    bool reset_occurred = false;
 
    quotas.modify(quota_itr, get_self(), [&](auto& row) {
