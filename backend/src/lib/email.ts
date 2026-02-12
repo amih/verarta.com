@@ -1,23 +1,38 @@
 import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
-const transporter = nodemailer.createTransporter({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+let transporter: Transporter | null = null;
+
+function getTransporter(): Transporter {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
+  return transporter;
+}
 
 export async function sendVerificationEmail(
   email: string,
   code: string,
   displayName: string
 ): Promise<void> {
-  const emailFrom = process.env.EMAIL_FROM || 'Verarta <noreply@verarta.com>';
+  // In DEV_MODE, skip sending email (user will use bypass code 414155)
+  if (process.env.DEV_MODE === 'true') {
+    console.log(`[DEV_MODE] Skipping email send to ${email}, code: ${code}`);
+    return;
+  }
 
-  await transporter.sendMail({
+  const emailFrom = process.env.EMAIL_FROM || 'Verarta <noreply@verarta.com>';
+  const mailer = getTransporter();
+
+  await mailer.sendMail({
     from: emailFrom,
     to: email,
     subject: 'Verify your Verarta account',
