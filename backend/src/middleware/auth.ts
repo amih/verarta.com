@@ -1,0 +1,55 @@
+import type { APIContext } from 'astro';
+import { verifyToken, isSessionValid } from '../lib/auth.js';
+
+export async function requireAuth(context: APIContext) {
+  const authHeader = context.request.headers.get('Authorization');
+  const cookieToken = context.cookies.get('session')?.value;
+
+  const token = authHeader?.replace('Bearer ', '') || cookieToken;
+
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  try {
+    // Verify JWT
+    const payload = verifyToken(token);
+
+    // Check if session is still valid (not revoked)
+    const valid = await isSessionValid(token);
+    if (!valid) {
+      return new Response(JSON.stringify({ error: 'Session expired or revoked' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Attach user to context
+    (context as any).user = payload;
+    return null; // Allow request to proceed
+
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Invalid token' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+export async function requireAdmin(context: APIContext) {
+  const authResult = await requireAuth(context);
+  if (authResult) return authResult;
+
+  const user = (context as any).user;
+  if (!user.isAdmin) {
+    return new Response(JSON.stringify({ error: 'Admin access required' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  return null;
+}
