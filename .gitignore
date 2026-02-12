@@ -5,6 +5,8 @@ TODO_AMIH.md
 blockchain/accounts.json
 blockchain/**/*.wallet
 blockchain/**/*.key
+blockchain/wallet_password.txt
+blockchain/WALLET_INFO.md
 
 # Node modules
 node_modules/
