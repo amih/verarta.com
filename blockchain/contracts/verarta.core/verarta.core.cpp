@@ -1,5 +1,7 @@
 #include "verarta.core.hpp"
 
+using eosio::current_time_point;
+
 namespace verarta {
 
 // ========== ACTION IMPLEMENTATIONS ==========
@@ -308,7 +310,7 @@ void verartatoken::rmadminkey(uint64_t key_id) {
    });
 }
 
-void verartatoken::logadminaccess(
+void verartatoken::logaccess(
    name admin_account,
    uint64_t file_id,
    std::string reason
@@ -527,4 +529,4 @@ uint64_t verartatoken::calculate_next_monday(uint64_t from_time) {
 } // namespace verarta
 
 // Dispatch actions
-EOSIO_DISPATCH(verarta::verartatoken, (createart)(addfile)(uploadchunk)(completefile)(setquota)(addadminkey)(rmadminkey)(logadminaccess)(deleteart))
+EOSIO_DISPATCH(verarta::verartatoken, (createart)(addfile)(uploadchunk)(completefile)(setquota)(addadminkey)(rmadminkey)(logaccess)(deleteart))

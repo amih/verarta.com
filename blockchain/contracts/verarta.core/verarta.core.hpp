@@ -143,7 +143,7 @@ public:
     * @param reason - Reason for access
     */
    [[eosio::action]]
-   void logadminaccess(
+   void logaccess(
       name admin_account,
       uint64_t file_id,
       std::string reason
