@@ -23,6 +23,8 @@ dist/
 build/
 *.wasm
 *.abi
+.next/
+out/
 
 # Dependencies
 package-lock.json
