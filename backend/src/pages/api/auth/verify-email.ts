@@ -25,6 +25,9 @@ export const POST: APIRoute = async ({ request }) => {
 
     const { email, code } = validation.data;
 
+    // DEV MODE: Accept "414155" as universal bypass code (until SMTP is configured)
+    const DEV_BYPASS = process.env.DEV_MODE === 'true' && code === '414155';
+
     // Get verification data from Redis
     const verifyDataStr = await getAndDelete(`email_verify:${email}`);
 
@@ -39,8 +42,8 @@ export const POST: APIRoute = async ({ request }) => {
 
     const verifyData = JSON.parse(verifyDataStr);
 
-    // Check if code matches
-    if (verifyData.code !== code) {
+    // Check if code matches (or DEV_BYPASS)
+    if (!DEV_BYPASS && verifyData.code !== code) {
       // Put the data back if code is wrong (allow retry)
       const timeLeft = 900 - Math.floor((Date.now() - verifyData.timestamp) / 1000);
       if (timeLeft > 0) {
