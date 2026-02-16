@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { getSession, backupKeys, fetchKeys } from '@/lib/api/auth';
+import { apiClient } from '@/lib/api/client';
 import { generateKeyPair, getKeyPair, storeKeyPair, importEncryptedKeyData, getEncryptedKeyData } from '@/lib/crypto/keys';
 import { generateAntelopeKeyPair, getAntelopeKey, storeAntelopeKey } from '@/lib/crypto/antelope';
 
@@ -47,9 +48,21 @@ function CallbackHandler() {
 
         login(user, token);
 
-        // Ensure encryption keys exist
+        // Ensure encryption + signing keys exist
         setStatus('Setting up encryption keys...');
-        await ensureKeys(user.email);
+        const antelopePublicKey = await ensureKeys(user.email);
+
+        // Create blockchain account on-chain if needed
+        if (antelopePublicKey) {
+          setStatus('Setting up blockchain account...');
+          try {
+            await apiClient.post('/api/auth/create-blockchain-account', {
+              antelope_public_key: antelopePublicKey,
+            });
+          } catch {
+            // May already exist — not fatal
+          }
+        }
 
         router.replace('/dashboard');
       } catch (err) {
@@ -99,32 +112,32 @@ export default function OAuthCallbackPage() {
   );
 }
 
-async function ensureKeys(email: string) {
-  // 1. Check if X25519 keys exist locally
-  const localKeys = await getKeyPair(email);
-  if (localKeys) return;
+// Returns the Antelope public key if a new key was generated (needs on-chain account creation)
+async function ensureKeys(email: string): Promise<string | null> {
+  // 1. Ensure X25519 encryption keys
+  let localKeys = await getKeyPair(email);
+  if (!localKeys) {
+    const serverKeys = await fetchKeys();
+    if (serverKeys) {
+      await importEncryptedKeyData(email, serverKeys);
+    } else {
+      const keyPair = await generateKeyPair();
+      await storeKeyPair(email, keyPair);
 
-  // 2. Check if server has a backup
-  const serverKeys = await fetchKeys();
-  if (serverKeys) {
-    await importEncryptedKeyData(email, serverKeys);
-    return;
+      const encryptedData = await getEncryptedKeyData(email);
+      if (encryptedData) {
+        await backupKeys(encryptedData);
+      }
+    }
   }
 
-  // 3. Generate fresh keys
-  const keyPair = await generateKeyPair();
-  await storeKeyPair(email, keyPair);
-
-  // Backup to server
-  const encryptedData = await getEncryptedKeyData(email);
-  if (encryptedData) {
-    await backupKeys(encryptedData);
-  }
-
-  // Also generate Antelope key pair if not present
+  // 2. Ensure Antelope signing keys
   const antelopeKey = await getAntelopeKey(email);
   if (!antelopeKey) {
     const { privateKey, publicKey } = generateAntelopeKeyPair();
     await storeAntelopeKey(email, privateKey, publicKey);
+    return publicKey; // new key — needs blockchain account creation
   }
+
+  return null; // keys already existed
 }
