@@ -115,3 +115,42 @@ export async function deleteKeyPair(email: string): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+// Get the encrypted key data (for server backup)
+export async function getEncryptedKeyData(email: string): Promise<{
+  publicKey: string;
+  encryptedPrivateKey: string;
+  nonce: string;
+} | null> {
+  const db = await openDB();
+  const stored = await new Promise<{
+    publicKey: string;
+    encryptedPrivateKey: string;
+    nonce: string;
+  } | undefined>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const request = tx.objectStore(STORE_NAME).get(email);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  return stored || null;
+}
+
+// Import encrypted key data from server backup into local IndexedDB
+export async function importEncryptedKeyData(
+  email: string,
+  data: { publicKey: string; encryptedPrivateKey: string; nonce: string }
+): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({
+      email,
+      publicKey: data.publicKey,
+      encryptedPrivateKey: data.encryptedPrivateKey,
+      nonce: data.nonce,
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}

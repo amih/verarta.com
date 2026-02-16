@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
-import { getSession } from '@/lib/api/auth';
+import { getSession, fetchKeys, backupKeys } from '@/lib/api/auth';
+import { getEncryptedKeyData, importEncryptedKeyData } from '@/lib/crypto/keys';
 import { Header } from '@/components/layout/Header';
 import { Loader2 } from 'lucide-react';
 

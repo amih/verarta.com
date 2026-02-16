@@ -1,5 +1,6 @@
 import { encryptFile } from '@/lib/crypto/encryption';
-import { getKeyPair } from '@/lib/crypto/keys';
+import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
+import { fetchKeys } from '@/lib/api/auth';
 import { fileToBase64 } from '@/lib/utils/chunking';
 import { uploadInit, uploadChunk, uploadComplete } from '@/lib/api/artworks';
 import { useUploadStore } from '@/store/upload';
@@ -26,8 +27,15 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
   const tempId = `temp-${Date.now()}`;
 
   try {
-    // 0. Get user's key pair
-    const keyPair = await getKeyPair(opts.email);
+    // 0. Get user's key pair (try local, then server backup)
+    let keyPair = await getKeyPair(opts.email);
+    if (!keyPair) {
+      const serverKeys = await fetchKeys();
+      if (serverKeys) {
+        await importEncryptedKeyData(opts.email, serverKeys);
+        keyPair = await getKeyPair(opts.email);
+      }
+    }
     if (!keyPair) {
       throw new Error('Encryption keys not found. Please re-register.');
     }

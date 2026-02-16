@@ -5,8 +5,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { loginSchema, type LoginInput } from '@/lib/utils/validation';
-import { login } from '@/lib/api/auth';
+import { login, fetchKeys } from '@/lib/api/auth';
 import { authenticateWebAuthn, isWebAuthnSupported } from '@/lib/crypto/webauthn';
+import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
 import { useAuthStore } from '@/store/auth';
 import { Loader2 } from 'lucide-react';
 
@@ -43,6 +44,19 @@ export function LoginForm() {
 
       // 3. Store session
       loginStore(result.user, result.token);
+
+      // 3b. Restore encryption keys if missing locally
+      try {
+        const localKeys = await getKeyPair(data.email);
+        if (!localKeys) {
+          const serverKeys = await fetchKeys();
+          if (serverKeys) {
+            await importEncryptedKeyData(data.email, serverKeys);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to restore encryption keys:', e);
+      }
 
       // 4. Redirect to dashboard
       router.push('/dashboard');

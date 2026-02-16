@@ -5,8 +5,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { verifyEmailSchema, type VerifyEmailInput } from '@/lib/utils/validation';
-import { verifyEmail, createAccount } from '@/lib/api/auth';
+import { verifyEmail, createAccount, backupKeys } from '@/lib/api/auth';
 import { registerWebAuthnCredential, isWebAuthnSupported } from '@/lib/crypto/webauthn';
+import { getEncryptedKeyData } from '@/lib/crypto/keys';
 import { useAuthStore } from '@/store/auth';
 import { Loader2 } from 'lucide-react';
 
@@ -69,6 +70,16 @@ export function VerifyEmailForm() {
 
       // 4. Store session
       loginStore(result.user, result.token);
+
+      // 4b. Backup encryption keys to server
+      try {
+        const keyData = await getEncryptedKeyData(email);
+        if (keyData) {
+          await backupKeys(keyData);
+        }
+      } catch (e) {
+        console.warn('Failed to backup encryption keys:', e);
+      }
 
       // 5. Clean up sessionStorage
       sessionStorage.removeItem('verarta_register_email');

@@ -46,3 +46,24 @@ export async function logout(): Promise<void> {
   await apiClient.post('/api/auth/logout');
   localStorage.removeItem('auth_token');
 }
+
+export async function backupKeys(data: {
+  publicKey: string;
+  encryptedPrivateKey: string;
+  nonce: string;
+}): Promise<void> {
+  await apiClient.post('/api/auth/keys', data);
+}
+
+export async function fetchKeys(): Promise<{
+  publicKey: string;
+  encryptedPrivateKey: string;
+  nonce: string;
+} | null> {
+  try {
+    const res = await apiClient.get('/api/auth/keys');
+    return res.data;
+  } catch {
+    return null;
+  }
+}
