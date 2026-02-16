@@ -27,7 +27,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     // Find user by email
     const result = await query(
-      `SELECT id, blockchain_account, email, display_name, is_admin, webauthn_credential_id
+      `SELECT id, blockchain_account, email, display_name, is_admin, webauthn_credential_id, avatar_url
        FROM users
        WHERE email = $1`,
       [email]
@@ -71,6 +71,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         display_name: user.display_name,
         is_admin: user.is_admin,
         webauthn_credential_id: user.webauthn_credential_id,
+        avatar_url: user.avatar_url,
       },
       token, // Also return token for non-cookie clients
     }), {

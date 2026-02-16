@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { LoginForm } from '@/components/auth/LoginForm';
+import { SSOButtons } from '@/components/auth/SSOButtons';
 
 export default function LoginPage() {
   return (
@@ -7,6 +8,7 @@ export default function LoginPage() {
       <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
         Sign in
       </h2>
+      <SSOButtons />
       <LoginForm />
       <p className="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
         Don&apos;t have an account?{' '}

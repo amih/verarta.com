@@ -17,6 +17,7 @@ export const GET: APIRoute = async (context) => {
         blockchain_account: user.blockchainAccount,
         email: user.email,
         is_admin: user.isAdmin,
+        avatar_url: user.avatarUrl,
       },
     }), {
       status: 200,

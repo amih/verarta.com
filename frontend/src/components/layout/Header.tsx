@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
@@ -23,8 +24,23 @@ export function Header() {
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-        <Link href="/dashboard" className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
-          Verarta
+        <Link href="/dashboard">
+          <Image
+            src="/logo/logo-dark.svg"
+            alt="Verarta"
+            width={140}
+            height={30}
+            className="block dark:hidden"
+            priority
+          />
+          <Image
+            src="/logo/logo-light.svg"
+            alt="Verarta"
+            width={140}
+            height={30}
+            className="hidden dark:block"
+            priority
+          />
         </Link>
 
         <nav className="flex items-center gap-4">
@@ -37,8 +53,22 @@ export function Header() {
           </Link>
 
           {user && (
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+            <span className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+              {user.avatar_url ? (
+                <img
+                  src={user.avatar_url}
+                  alt=""
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-xs font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                  {user.display_name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
+                </span>
+              )}
               {user.display_name}
+              <span className="font-mono text-xs text-zinc-400 dark:text-zinc-500">
+                ({user.blockchain_account})
+              </span>
             </span>
           )}
 

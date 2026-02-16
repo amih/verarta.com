@@ -10,6 +10,7 @@ export interface SessionPayload {
   blockchainAccount: string;
   email: string;
   isAdmin: boolean;
+  avatarUrl: string | null;
 }
 
 // Create JWT token
@@ -57,7 +58,7 @@ export async function isSessionValid(token: string): Promise<boolean> {
 // Get user payload from database
 async function getUserPayload(userId: number): Promise<SessionPayload> {
   const result = await query(
-    'SELECT blockchain_account, email, is_admin FROM users WHERE id = $1',
+    'SELECT blockchain_account, email, is_admin, avatar_url FROM users WHERE id = $1',
     [userId]
   );
 
@@ -71,5 +72,6 @@ async function getUserPayload(userId: number): Promise<SessionPayload> {
     blockchainAccount: user.blockchain_account,
     email: user.email,
     isAdmin: user.is_admin,
+    avatarUrl: user.avatar_url || null,
   };
 }

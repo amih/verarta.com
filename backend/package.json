@@ -12,24 +12,25 @@
     "db:seed": "node scripts/seed.js"
   },
   "dependencies": {
-    "astro": "^5.0.0",
     "@astrojs/node": "^9.0.0",
     "@wharfkit/antelope": "^1.0.7",
-    "eosjs": "^22.1.0",
-    "pg": "^8.11.3",
-    "redis": "^4.6.13",
+    "arctic": "^3.7.0",
+    "astro": "^5.0.0",
     "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.5",
+    "eosjs": "^22.1.0",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^6.9.10",
-    "zod": "^3.22.4",
-    "dotenv": "^16.4.5"
+    "pg": "^8.11.3",
+    "redis": "^4.6.13",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/node": "^20.11.19",
-    "@types/pg": "^8.11.0",
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^20.11.19",
     "@types/nodemailer": "^6.4.14",
+    "@types/pg": "^8.11.0",
     "typescript": "^5.3.3"
   }
 }

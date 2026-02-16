@@ -4,6 +4,7 @@ export interface User {
   email: string;
   display_name: string;
   is_admin: boolean;
+  avatar_url?: string;
 }
 
 export interface SessionUser {
@@ -11,4 +12,5 @@ export interface SessionUser {
   blockchain_account: string;
   email: string;
   is_admin: boolean;
+  avatar_url?: string;
 }

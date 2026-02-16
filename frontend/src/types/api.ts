@@ -48,7 +48,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   success: true;
-  user: User & { webauthn_credential_id: string };
+  user: User & { webauthn_credential_id: string; avatar_url?: string };
   token: string;
 }
 
