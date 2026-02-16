@@ -32,10 +32,13 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
 
   try {
     // 0. Get user's X25519 key pair (try local, then server backup)
+    console.log('[upload] Getting X25519 keys for', opts.email);
     let keyPair = await getKeyPair(opts.email);
     if (!keyPair) {
+      console.log('[upload] No local keys, trying server backup');
       const serverKeys = await fetchKeys();
       if (serverKeys) {
+        console.log('[upload] Server keys found, importing');
         await importEncryptedKeyData(opts.email, serverKeys);
         keyPair = await getKeyPair(opts.email);
       }
@@ -43,18 +46,23 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
     if (!keyPair) {
       throw new Error('Encryption keys not found. Please re-register.');
     }
+    console.log('[upload] X25519 publicKey length', keyPair.publicKey.length, 'chars (base64)');
 
     // 0b. Get user's Antelope key for transaction signing
     const antelopeKey = await getAntelopeKey(opts.email);
     if (!antelopeKey) {
       throw new Error('Blockchain signing key not found. Please re-register.');
     }
+    console.log('[upload] Antelope key ready');
 
     // 1. Encrypt the file
     store.setEncrypting(tempId);
     const recipientKeys = [keyPair.publicKey, ...(opts.adminPublicKeys || [])];
+    console.log('[upload] Encrypting file with', recipientKeys.length, 'recipient(s)');
     const fileBuffer = await opts.file.arrayBuffer();
+    console.log('[upload] File buffer size:', fileBuffer.byteLength);
     const encrypted = await encryptFile(fileBuffer, recipientKeys);
+    console.log('[upload] Encryption complete, nonce:', encrypted.nonce.length, 'chars (base64)');
 
     // 2. Generate unique IDs for artwork and file
     const artworkId = Date.now();

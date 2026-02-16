@@ -104,7 +104,15 @@ export async function getKeyPair(email: string): Promise<KeyPair | null> {
 
   const nonce = sodium.from_base64(stored.nonce, sodium.base64_variants.ORIGINAL);
   const encrypted = sodium.from_base64(stored.encryptedPrivateKey, sodium.base64_variants.ORIGINAL);
-  const privateKeyBytes = sodium.crypto_secretbox_open_easy(encrypted, nonce, key);
+
+  console.log('[keys] getKeyPair: secretbox nonce length', nonce.length, 'expected', sodium.crypto_secretbox_NONCEBYTES);
+
+  let privateKeyBytes: Uint8Array;
+  try {
+    privateKeyBytes = sodium.crypto_secretbox_open_easy(encrypted, nonce, key);
+  } catch (err) {
+    throw new Error(`getKeyPair: crypto_secretbox_open_easy failed (nonce=${nonce.length}B, encrypted=${encrypted.length}B, key=${key.length}B): ${err}`);
+  }
 
   return {
     publicKey: stored.publicKey,

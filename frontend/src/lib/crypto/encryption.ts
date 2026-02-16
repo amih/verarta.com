@@ -37,29 +37,44 @@ export async function encryptFile(
   // 2. Generate random nonce
   const nonce = sodium.randombytes_buf(sodium.crypto_aead_chacha20poly1305_ietf_NPUBBYTES);
 
+  console.log('[encrypt] AEAD nonce length', nonce.length, 'expected', sodium.crypto_aead_chacha20poly1305_ietf_NPUBBYTES);
+
   // 3. Encrypt file with DEK using ChaCha20-Poly1305
-  const ciphertext = sodium.crypto_aead_chacha20poly1305_ietf_encrypt(
-    new Uint8Array(fileBuffer),
-    null, // no additional data
-    null, // no secret nonce
-    nonce,
-    dek
-  );
+  let ciphertext: Uint8Array;
+  try {
+    ciphertext = sodium.crypto_aead_chacha20poly1305_ietf_encrypt(
+      new Uint8Array(fileBuffer),
+      null, // no additional data
+      null, // no secret nonce
+      nonce,
+      dek
+    );
+  } catch (err) {
+    throw new Error(`encryptFile: AEAD encrypt failed (nonce=${nonce.length}B, dek=${dek.length}B): ${err}`);
+  }
 
   // 4. Encrypt DEK for each recipient using X25519 box
   // crypto_box_easy requires a 24-byte nonce; pad the 12-byte AEAD nonce with zeros
   const boxNonce = new Uint8Array(sodium.crypto_box_NONCEBYTES);
   boxNonce.set(nonce);
 
-  const encryptedDeks = recipientPublicKeys.map((pubKeyB64) => {
+  console.log('[encrypt] box nonce length', boxNonce.length, 'expected', sodium.crypto_box_NONCEBYTES);
+
+  const encryptedDeks = recipientPublicKeys.map((pubKeyB64, idx) => {
     const pubKeyBytes = sodium.from_base64(pubKeyB64, sodium.base64_variants.ORIGINAL);
     const ephemeralKeyPair = sodium.crypto_box_keypair();
-    const encryptedDek = sodium.crypto_box_easy(
-      dek,
-      boxNonce,
-      pubKeyBytes,
-      ephemeralKeyPair.privateKey
-    );
+    console.log(`[encrypt] recipient[${idx}] pubKey=${pubKeyBytes.length}B`);
+    let encryptedDek: Uint8Array;
+    try {
+      encryptedDek = sodium.crypto_box_easy(
+        dek,
+        boxNonce,
+        pubKeyBytes,
+        ephemeralKeyPair.privateKey
+      );
+    } catch (err) {
+      throw new Error(`encryptFile: crypto_box_easy failed for recipient[${idx}] (boxNonce=${boxNonce.length}B, pubKey=${pubKeyBytes.length}B): ${err}`);
+    }
     return {
       encryptedDek: sodium.to_base64(encryptedDek, sodium.base64_variants.ORIGINAL),
       ephemeralPublicKey: sodium.to_base64(ephemeralKeyPair.publicKey, sodium.base64_variants.ORIGINAL),
