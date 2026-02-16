@@ -47,12 +47,16 @@ export async function encryptFile(
   );
 
   // 4. Encrypt DEK for each recipient using X25519 box
+  // crypto_box_easy requires a 24-byte nonce; pad the 12-byte AEAD nonce with zeros
+  const boxNonce = new Uint8Array(sodium.crypto_box_NONCEBYTES);
+  boxNonce.set(nonce);
+
   const encryptedDeks = recipientPublicKeys.map((pubKeyB64) => {
     const pubKeyBytes = sodium.from_base64(pubKeyB64, sodium.base64_variants.ORIGINAL);
     const ephemeralKeyPair = sodium.crypto_box_keypair();
     const encryptedDek = sodium.crypto_box_easy(
       dek,
-      nonce,
+      boxNonce,
       pubKeyBytes,
       ephemeralKeyPair.privateKey
     );
@@ -91,9 +95,13 @@ export async function decryptFile(
   const userPrivateKey = sodium.from_base64(userPrivateKeyB64, sodium.base64_variants.ORIGINAL);
 
   // 1. Decrypt DEK with user's private key
+  // crypto_box_open_easy requires a 24-byte nonce; pad the 12-byte AEAD nonce with zeros
+  const boxNonce = new Uint8Array(sodium.crypto_box_NONCEBYTES);
+  boxNonce.set(nonce);
+
   const dek = sodium.crypto_box_open_easy(
     encryptedDek,
-    nonce,
+    boxNonce,
     ephemeralPublicKey,
     userPrivateKey
   );
