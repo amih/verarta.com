@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
@@ -9,7 +9,7 @@ import { uploadArtwork } from '@/lib/upload/orchestrator';
 import { useAuthStore } from '@/store/auth';
 import { useUploadStore } from '@/store/upload';
 import { ALLOWED_MIME_TYPES } from '@/types/artwork';
-import { Upload, X, FileIcon, Loader2 } from 'lucide-react';
+import { Upload, X, FileIcon, FileText, Loader2 } from 'lucide-react';
 
 export function UploadForm() {
   const router = useRouter();
@@ -18,7 +18,18 @@ export function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (file && file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [file]);
 
   const {
     register,
@@ -123,7 +134,21 @@ export function UploadForm() {
         />
         {file ? (
           <div className="flex items-center gap-3">
-            <FileIcon className="h-8 w-8 text-zinc-400" />
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt="Preview"
+                className="h-16 w-16 rounded object-cover"
+              />
+            ) : file.type === 'application/pdf' ? (
+              <div className="flex h-16 w-16 items-center justify-center rounded bg-red-100 dark:bg-red-900/30">
+                <FileIcon className="h-8 w-8 text-red-500" />
+              </div>
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded bg-blue-100 dark:bg-blue-900/30">
+                <FileText className="h-8 w-8 text-blue-500" />
+              </div>
+            )}
             <div>
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{file.name}</p>
               <p className="text-xs text-zinc-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>

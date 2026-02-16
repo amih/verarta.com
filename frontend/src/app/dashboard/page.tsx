@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArtworkGrid } from '@/components/artwork/ArtworkGrid';
 import { QuotaDisplay } from '@/components/artwork/QuotaDisplay';
+import { AccountInfo } from '@/components/artwork/AccountInfo';
 import { Upload } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -24,7 +25,8 @@ export default function DashboardPage() {
           <h2 className="mb-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Your Artworks</h2>
           <ArtworkGrid />
         </div>
-        <div>
+        <div className="space-y-6">
+          <AccountInfo />
           <QuotaDisplay />
         </div>
       </div>
