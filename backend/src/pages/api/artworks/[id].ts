@@ -32,8 +32,8 @@ export const GET: APIRoute = async ({ params }) => {
 
     // Get artwork from blockchain
     const artworkResult = await getTableRows({
-      code: 'verartacore',
-      scope: 'verartacore',
+      code: 'verarta.core',
+      scope: 'verarta.core',
       table: 'artworks',
       lower_bound: artworkId.toString(),
       upper_bound: artworkId.toString(),
@@ -53,8 +53,8 @@ export const GET: APIRoute = async ({ params }) => {
 
     // Get associated files
     const filesResult = await getTableRows({
-      code: 'verartacore',
-      scope: 'verartacore',
+      code: 'verarta.core',
+      scope: 'verarta.core',
       table: 'artfiles',
       index_position: 2, // by_artwork_id index (if exists)
       lower_bound: artworkId.toString(),

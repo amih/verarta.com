@@ -13,7 +13,7 @@ export const producerClient = new APIClient({
 // Chain configuration
 export const CHAIN_CONFIG = {
   chainId: process.env.CHAIN_ID || '',
-  contractAccount: Name.from('verartacore'),
+  contractAccount: Name.from('verarta.core'),
   systemAccount: Name.from('eosio'),
 };
 

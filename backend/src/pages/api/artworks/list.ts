@@ -13,8 +13,8 @@ export const GET: APIRoute = async (context) => {
     // Query artworks table from blockchain
     // Using secondary index to get artworks by owner
     const result = await getTableRows({
-      code: 'verartacore',
-      scope: 'verartacore',
+      code: 'verarta.core',
+      scope: 'verarta.core',
       table: 'artworks',
       index_position: 2, // by_owner index
       key_type: 'name',

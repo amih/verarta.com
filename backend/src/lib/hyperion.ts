@@ -30,7 +30,7 @@ export async function getTransaction(txId: string) {
 export async function getFileChunks(fileId: number, owner: string) {
   const actions = await getActions({
     account: owner,
-    filter: `verartacore:uploadchunk`,
+    filter: `verarta.core:uploadchunk`,
     limit: 10000,
   });
 

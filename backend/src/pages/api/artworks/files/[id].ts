@@ -34,8 +34,8 @@ export const GET: APIRoute = async ({ params, url }) => {
 
     // Get file metadata from blockchain
     const fileResult = await getTableRows({
-      code: 'verartacore',
-      scope: 'verartacore',
+      code: 'verarta.core',
+      scope: 'verarta.core',
       table: 'artfiles',
       lower_bound: fileId.toString(),
       upper_bound: fileId.toString(),
