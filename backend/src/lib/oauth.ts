@@ -33,6 +33,20 @@ function getMicrosoft(): MicrosoftEntraId {
   );
 }
 
+export function getEnabledProviders(): OAuthProvider[] {
+  const providers: OAuthProvider[] = [];
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    providers.push('google');
+  }
+  if (process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY) {
+    providers.push('apple');
+  }
+  if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
+    providers.push('microsoft');
+  }
+  return providers;
+}
+
 export interface OAuthUserProfile {
   email: string;
   name: string | null;

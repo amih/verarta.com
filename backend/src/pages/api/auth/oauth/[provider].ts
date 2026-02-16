@@ -1,15 +1,14 @@
 import type { APIRoute } from 'astro';
 import { setWithExpiry } from '../../../../lib/redis.js';
-import { createAuthorizationURL, type OAuthProvider } from '../../../../lib/oauth.js';
-
-const VALID_PROVIDERS = new Set<OAuthProvider>(['google', 'apple', 'microsoft']);
+import { createAuthorizationURL, getEnabledProviders, type OAuthProvider } from '../../../../lib/oauth.js';
 
 export const GET: APIRoute = async ({ params, redirect }) => {
   try {
     const provider = params.provider as string;
+    const enabled = getEnabledProviders();
 
-    if (!VALID_PROVIDERS.has(provider as OAuthProvider)) {
-      return new Response(JSON.stringify({ error: 'Invalid provider' }), {
+    if (!enabled.includes(provider as OAuthProvider)) {
+      return new Response(JSON.stringify({ error: 'Provider not available' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });

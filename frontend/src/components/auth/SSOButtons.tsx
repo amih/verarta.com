@@ -1,6 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4321';
+
+type Provider = 'google' | 'apple' | 'microsoft';
 
 function GoogleIcon() {
   return (
@@ -32,36 +36,56 @@ function MicrosoftIcon() {
   );
 }
 
+const PROVIDER_CONFIG: Record<Provider, {
+  icon: () => React.ReactNode;
+  label: string;
+  className: string;
+}> = {
+  google: {
+    icon: GoogleIcon,
+    label: 'Continue with Google',
+    className: 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700',
+  },
+  apple: {
+    icon: AppleIcon,
+    label: 'Continue with Apple',
+    className: 'border-zinc-300 bg-black text-white hover:bg-zinc-800 dark:border-zinc-600',
+  },
+  microsoft: {
+    icon: MicrosoftIcon,
+    label: 'Continue with Microsoft',
+    className: 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700',
+  },
+};
+
 export function SSOButtons() {
-  function handleSSO(provider: 'google' | 'apple' | 'microsoft') {
-    window.location.href = `${API_URL}/api/auth/oauth/${provider}`;
-  }
+  const [providers, setProviders] = useState<Provider[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/auth/oauth/providers`)
+      .then((res) => res.json())
+      .then((data) => setProviders(data.providers || []))
+      .catch(() => {}); // silently hide SSO if endpoint unreachable
+  }, []);
+
+  if (providers.length === 0) return null;
 
   return (
     <div className="space-y-3">
-      <button
-        onClick={() => handleSSO('google')}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-      >
-        <GoogleIcon />
-        Continue with Google
-      </button>
-
-      <button
-        onClick={() => handleSSO('apple')}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-300 bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:border-zinc-600"
-      >
-        <AppleIcon />
-        Continue with Apple
-      </button>
-
-      <button
-        onClick={() => handleSSO('microsoft')}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-      >
-        <MicrosoftIcon />
-        Continue with Microsoft
-      </button>
+      {providers.map((provider) => {
+        const config = PROVIDER_CONFIG[provider];
+        const Icon = config.icon;
+        return (
+          <button
+            key={provider}
+            onClick={() => { window.location.href = `${API_URL}/api/auth/oauth/${provider}`; }}
+            className={`flex w-full items-center justify-center gap-3 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${config.className}`}
+          >
+            <Icon />
+            {config.label}
+          </button>
+        );
+      })}
 
       <div className="relative my-4">
         <div className="absolute inset-0 flex items-center">
