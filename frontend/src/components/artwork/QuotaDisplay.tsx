@@ -5,18 +5,18 @@ import { queryTable } from '@/lib/api/chain';
 import { useAuthStore } from '@/store/auth';
 
 interface QuotaRow {
-  user: string;
+  account: string;
   tier: number;
-  daily_file_count: number;
-  daily_byte_count: number;
-  weekly_file_count: number;
-  weekly_byte_count: number;
+  daily_files_used: number;
+  daily_size_used: number;
+  weekly_files_used: number;
+  weekly_size_used: number;
   daily_file_limit: number;
-  daily_byte_limit: number;
+  daily_size_limit: number;
   weekly_file_limit: number;
-  weekly_byte_limit: number;
-  last_daily_reset: number;
-  last_weekly_reset: number;
+  weekly_size_limit: number;
+  daily_reset_at: number;
+  weekly_reset_at: number;
 }
 
 function formatBytes(bytes: number): string {
@@ -49,7 +49,7 @@ function ProgressBar({ used, total, label }: { used: number; total: number; labe
 export function QuotaDisplay() {
   const user = useAuthStore((s) => s.user);
 
-  const { data: quota } = useQuery({
+  const { data: quota, isPending } = useQuery({
     queryKey: ['quota', user?.blockchain_account],
     queryFn: async () => {
       if (!user) return null;
@@ -67,10 +67,21 @@ export function QuotaDisplay() {
     refetchInterval: 30000,
   });
 
-  if (!quota) {
+  if (isPending) {
     return (
       <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
         <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading quota...</p>
+      </div>
+    );
+  }
+
+  if (!quota) {
+    return (
+      <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+        <h3 className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">Usage Quota</h3>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          No quota data yet. Upload an artwork to initialize your quota.
+        </p>
       </div>
     );
   }
@@ -80,24 +91,24 @@ export function QuotaDisplay() {
       <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">Usage Quota</h3>
       <div className="space-y-3">
         <ProgressBar
-          used={quota.daily_file_count}
+          used={quota.daily_files_used}
           total={quota.daily_file_limit}
-          label={`Daily files: ${quota.daily_file_count}/${quota.daily_file_limit}`}
+          label={`Daily files: ${quota.daily_files_used}/${quota.daily_file_limit}`}
         />
         <ProgressBar
-          used={quota.daily_byte_count}
-          total={quota.daily_byte_limit}
-          label={`Daily size: ${formatBytes(quota.daily_byte_count)}/${formatBytes(quota.daily_byte_limit)}`}
+          used={quota.daily_size_used}
+          total={quota.daily_size_limit}
+          label={`Daily size: ${formatBytes(quota.daily_size_used)}/${formatBytes(quota.daily_size_limit)}`}
         />
         <ProgressBar
-          used={quota.weekly_file_count}
+          used={quota.weekly_files_used}
           total={quota.weekly_file_limit}
-          label={`Weekly files: ${quota.weekly_file_count}/${quota.weekly_file_limit}`}
+          label={`Weekly files: ${quota.weekly_files_used}/${quota.weekly_file_limit}`}
         />
         <ProgressBar
-          used={quota.weekly_byte_count}
-          total={quota.weekly_byte_limit}
-          label={`Weekly size: ${formatBytes(quota.weekly_byte_count)}/${formatBytes(quota.weekly_byte_limit)}`}
+          used={quota.weekly_size_used}
+          total={quota.weekly_size_limit}
+          label={`Weekly size: ${formatBytes(quota.weekly_size_used)}/${formatBytes(quota.weekly_size_limit)}`}
         />
       </div>
       <p className="mt-3 text-xs text-zinc-400">
