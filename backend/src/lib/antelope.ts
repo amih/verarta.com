@@ -1,4 +1,14 @@
-import { APIClient, Name } from '@wharfkit/antelope';
+import {
+  APIClient,
+  Name,
+  Action,
+  Transaction,
+  PermissionLevel,
+  Serializer,
+  PrivateKey,
+  Checksum256,
+  TimePointSec,
+} from '@wharfkit/antelope';
 
 // History node for read operations
 export const chainClient = new APIClient({
@@ -16,6 +26,15 @@ export const CHAIN_CONFIG = {
   contractAccount: Name.from('verarta.core'),
   systemAccount: Name.from('eosio'),
 };
+
+// Service key for server-side transaction signing (uploadchunk, completefile)
+function getServiceKey(): PrivateKey {
+  const key = process.env.SERVICE_PRIVATE_KEY;
+  if (!key) {
+    throw new Error('SERVICE_PRIVATE_KEY not configured');
+  }
+  return PrivateKey.from(key);
+}
 
 // Get chain info
 export async function getChainInfo() {
@@ -54,4 +73,145 @@ export async function getTableRows(params: {
 // Push transaction
 export async function pushTransaction(serializedTransaction: any) {
   return await producerClient.v1.chain.push_transaction(serializedTransaction);
+}
+
+/**
+ * Build, sign, and push a transaction using the service key.
+ * Used for uploadchunk and completefile actions that the server handles.
+ */
+export async function buildAndSignTransaction(
+  actionName: string,
+  data: Record<string, unknown>,
+  authorization?: PermissionLevel
+): Promise<{ transaction_id: string }> {
+  const info = await chainClient.v1.chain.get_info();
+  const contractAccount = CHAIN_CONFIG.contractAccount;
+  const serviceKey = getServiceKey();
+
+  const auth = authorization || PermissionLevel.from({
+    actor: contractAccount,
+    permission: 'active',
+  });
+
+  // Get the ABI to properly serialize the action data
+  const { abi } = await chainClient.v1.chain.get_abi(contractAccount);
+  if (!abi) {
+    throw new Error('Failed to fetch contract ABI');
+  }
+
+  const action = Action.from({
+    account: contractAccount,
+    name: Name.from(actionName),
+    authorization: [auth],
+    data,
+  }, abi);
+
+  // Build transaction header
+  const expiration = TimePointSec.fromMilliseconds(
+    info.head_block_time.toMilliseconds() + 60000
+  );
+
+  const transaction = Transaction.from({
+    expiration,
+    ref_block_num: info.head_block_num.value & 0xffff,
+    ref_block_prefix: info.head_block_id.array.slice(8, 12).reduce(
+      (val: number, byte: number, i: number) => val | (byte << (i * 8)),
+      0
+    ) >>> 0,
+    actions: [action],
+  });
+
+  // Sign
+  const chainId = Checksum256.from(info.chain_id);
+  const signature = serviceKey.signDigest(transaction.signingDigest(chainId));
+
+  // Push
+  const result = await producerClient.v1.chain.push_transaction({
+    signatures: [signature],
+    serializedTransaction: Serializer.encode({ object: transaction }),
+  });
+
+  return { transaction_id: String(result.transaction_id) };
+}
+
+/**
+ * Create a blockchain account for a new user.
+ * Uses the system `newaccount` action with the service key,
+ * then stakes resources for the new account.
+ */
+export async function createBlockchainAccount(
+  accountName: string,
+  userAntelopePublicKey: string
+): Promise<void> {
+  const info = await chainClient.v1.chain.get_info();
+  const serviceKey = getServiceKey();
+  const contractAccount = CHAIN_CONFIG.contractAccount;
+  const systemAccount = CHAIN_CONFIG.systemAccount;
+
+  const auth = PermissionLevel.from({
+    actor: contractAccount,
+    permission: 'active',
+  });
+
+  // Get system ABI for newaccount
+  const { abi: systemAbi } = await chainClient.v1.chain.get_abi(systemAccount);
+  if (!systemAbi) {
+    throw new Error('Failed to fetch system ABI');
+  }
+
+  const newAccountAction = Action.from({
+    account: systemAccount,
+    name: Name.from('newaccount'),
+    authorization: [auth],
+    data: {
+      creator: contractAccount,
+      name: Name.from(accountName),
+      owner: {
+        threshold: 1,
+        keys: [{ key: userAntelopePublicKey, weight: 1 }],
+        accounts: [],
+        waits: [],
+      },
+      active: {
+        threshold: 1,
+        keys: [{ key: userAntelopePublicKey, weight: 1 }],
+        accounts: [],
+        waits: [],
+      },
+    },
+  }, systemAbi);
+
+  // Buy RAM for the new account
+  const buyRamAction = Action.from({
+    account: systemAccount,
+    name: Name.from('buyrambytes'),
+    authorization: [auth],
+    data: {
+      payer: contractAccount,
+      receiver: Name.from(accountName),
+      bytes: 8192,
+    },
+  }, systemAbi);
+
+  const expiration = TimePointSec.fromMilliseconds(
+    info.head_block_time.toMilliseconds() + 60000
+  );
+
+  const transaction = Transaction.from({
+    expiration,
+    ref_block_num: info.head_block_num.value & 0xffff,
+    ref_block_prefix: info.head_block_id.array.slice(8, 12).reduce(
+      (val: number, byte: number, i: number) => val | (byte << (i * 8)),
+      0
+    ) >>> 0,
+    actions: [newAccountAction, buyRamAction],
+  });
+
+  const chainId = Checksum256.from(info.chain_id);
+  const signature = serviceKey.signDigest(transaction.signingDigest(chainId));
+
+  await producerClient.v1.chain.push_transaction({
+    signatures: [signature],
+    serializedTransaction: Serializer.encode({ object: transaction }),
+  });
 }

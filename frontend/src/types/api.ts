@@ -33,6 +33,7 @@ export interface CreateAccountRequest {
   email: string;
   webauthn_credential_id: string;
   webauthn_public_key: string;
+  antelope_public_key: string;
 }
 
 export interface CreateAccountResponse {
@@ -115,7 +116,7 @@ export interface TableQueryResponse<T = Record<string, unknown>> {
   next_key: string | null;
 }
 
-// Artworks
+// Artworks — legacy endpoints (kept for backwards compatibility)
 export interface UploadInitRequest {
   title: string;
   filename: string;
@@ -164,6 +165,26 @@ export interface UploadCompleteResponse {
   message: string;
   blockchain_artwork_id: number;
   blockchain_file_id: number;
+}
+
+// New upload-start endpoint (server handles chunks)
+export interface UploadStartRequest {
+  artwork_id: number;
+  file_id: number;
+  title: string;
+  filename: string;
+  mime_type: string;
+  file_data: string; // base64-encoded encrypted ciphertext
+  is_thumbnail?: boolean;
+}
+
+export interface UploadStartResponse {
+  success: true;
+  upload_id: string;
+  total_chunks: number;
+  file_size: number;
+  file_hash: string;
+  message: string;
 }
 
 export interface ArtworkListResponse {

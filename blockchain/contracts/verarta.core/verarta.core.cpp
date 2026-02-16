@@ -125,7 +125,7 @@ void verartatoken::uploadchunk(
    std::string chunk_data,
    uint32_t chunk_size
 ) {
-   require_auth(owner);
+   check(has_auth(owner) || has_auth(get_self()), "missing required authority");
 
    // Validate inputs
    check(chunk_id > 0, "chunk_id must be positive");
@@ -175,7 +175,7 @@ void verartatoken::completefile(
    name owner,
    uint32_t total_chunks
 ) {
-   require_auth(owner);
+   check(has_auth(owner) || has_auth(get_self()), "missing required authority");
 
    // Validate inputs
    check(file_id > 0, "file_id must be positive");

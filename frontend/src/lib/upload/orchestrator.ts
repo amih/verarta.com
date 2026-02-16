@@ -1,23 +1,27 @@
 import { encryptFile } from '@/lib/crypto/encryption';
 import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
+import { getAntelopeKey, signAndPushTransaction } from '@/lib/crypto/antelope';
 import { fetchKeys } from '@/lib/api/auth';
-import { fileToBase64 } from '@/lib/utils/chunking';
-import { uploadInit, uploadChunk, uploadComplete } from '@/lib/api/artworks';
+import { uploadStart } from '@/lib/api/artworks';
+import { uint8ToBase64 } from '@/lib/utils/chunking';
 import { useUploadStore } from '@/store/upload';
 
 export interface UploadOptions {
   file: File;
   title: string;
   email: string; // for key retrieval
-  adminPublicKeys?: string[]; // base64
+  blockchainAccount: string; // user's blockchain account name
+  adminPublicKeys?: string[]; // base64 X25519 public keys
 }
 
 /**
- * Full upload orchestration:
- * 1. Encrypt the file client-side
- * 2. Initialize upload with backend (sends base64 file data)
- * 3. Upload chunks with signed transactions
- * 4. Complete the upload
+ * Full upload orchestration (new flow):
+ * 1. Get user's keys (X25519 for encryption, Antelope for signing)
+ * 2. Encrypt file client-side
+ * 3. Sign & push `createart` tx from browser
+ * 4. Sign & push `addfile` tx from browser (stores encryption metadata on-chain)
+ * 5. Send encrypted ciphertext to backend `POST /api/artworks/upload-start`
+ * 6. Backend handles chunking + chain writes with service key
  */
 export async function uploadArtwork(opts: UploadOptions): Promise<{
   artworkId: number;
@@ -27,7 +31,7 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
   const tempId = `temp-${Date.now()}`;
 
   try {
-    // 0. Get user's key pair (try local, then server backup)
+    // 0. Get user's X25519 key pair (try local, then server backup)
     let keyPair = await getKeyPair(opts.email);
     if (!keyPair) {
       const serverKeys = await fetchKeys();
@@ -40,72 +44,89 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
       throw new Error('Encryption keys not found. Please re-register.');
     }
 
+    // 0b. Get user's Antelope key for transaction signing
+    const antelopeKey = await getAntelopeKey(opts.email);
+    if (!antelopeKey) {
+      throw new Error('Blockchain signing key not found. Please re-register.');
+    }
+
     // 1. Encrypt the file
     store.setEncrypting(tempId);
     const recipientKeys = [keyPair.publicKey, ...(opts.adminPublicKeys || [])];
     const fileBuffer = await opts.file.arrayBuffer();
     const encrypted = await encryptFile(fileBuffer, recipientKeys);
 
-    // 2. Convert file to base64 for upload-init
-    const fileDataB64 = await fileToBase64(opts.file);
+    // 2. Generate unique IDs for artwork and file
+    const artworkId = Date.now();
+    const fileId = artworkId + 1;
 
-    // 3. Initialize upload
-    const initResult = await uploadInit({
+    // 3. Sign & push `createart` tx from browser
+    store.startUpload(tempId, 3); // 3 steps: createart, addfile, upload
+    store.updateProgress(tempId, 0);
+
+    await signAndPushTransaction(
+      'createart',
+      {
+        artwork_id: artworkId,
+        owner: opts.blockchainAccount,
+        title_encrypted: btoa(opts.title), // Simple base64 for now
+        description_encrypted: '',
+        metadata_encrypted: '',
+        creator_public_key: keyPair.publicKey,
+      },
+      opts.blockchainAccount,
+      antelopeKey.privateKey
+    );
+
+    store.updateProgress(tempId, 1);
+
+    // 4. Sign & push `addfile` tx from browser (encryption metadata on-chain)
+    // Convert file hash from hex to the checksum256 format the contract expects
+    const hashBytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      hashBytes[i] = parseInt(encrypted.hash.slice(i * 2, i * 2 + 2), 16);
+    }
+
+    await signAndPushTransaction(
+      'addfile',
+      {
+        file_id: fileId,
+        artwork_id: artworkId,
+        owner: opts.blockchainAccount,
+        filename_encrypted: btoa(opts.file.name),
+        mime_type: opts.file.type,
+        file_size: encrypted.ciphertext.length,
+        file_hash: encrypted.hash,
+        encrypted_dek: encrypted.encryptedDeks[0].encryptedDek,
+        admin_encrypted_deks: encrypted.encryptedDeks.slice(1).map(d => d.encryptedDek),
+        iv: encrypted.nonce,
+        auth_tag: encrypted.encryptedDeks[0].ephemeralPublicKey,
+        is_thumbnail: false,
+      },
+      opts.blockchainAccount,
+      antelopeKey.privateKey
+    );
+
+    store.updateProgress(tempId, 2);
+
+    // 5. Send encrypted ciphertext to backend for chunking + chain upload
+    store.setCompleting(tempId);
+    const ciphertextB64 = uint8ToBase64(encrypted.ciphertext);
+
+    await uploadStart({
+      artwork_id: artworkId,
+      file_id: fileId,
       title: opts.title,
       filename: opts.file.name,
       mime_type: opts.file.type,
-      file_data: fileDataB64,
+      file_data: ciphertextB64,
     });
 
-    const { upload_id, total_chunks } = initResult;
-    store.removeUpload(tempId);
-    store.startUpload(upload_id, total_chunks);
-
-    // 4. Upload chunks
-    // The backend handles chunking from the file_data sent in upload-init.
-    // Each chunk upload requires a signed blockchain transaction.
-    // For now, we push transactions through the backend proxy.
-    for (let i = 0; i < total_chunks; i++) {
-      await uploadChunk({
-        upload_id,
-        chunk_index: i,
-        signed_transaction: {
-          // The backend proxies the transaction signing in dev mode.
-          // In production, this would be signed client-side with WebAuthn.
-          signatures: [],
-          serializedTransaction: '',
-        },
-      });
-      store.updateProgress(upload_id, i + 1);
-    }
-
-    // 5. Complete the upload
-    store.setCompleting(upload_id);
-    const completeResult = await uploadComplete({
-      upload_id,
-      blockchain_artwork_id: 0, // assigned by backend
-      blockchain_file_id: 0,    // assigned by backend
-    });
-
-    store.completeUpload(upload_id);
-
-    // Store encryption metadata locally for later decryption
-    if (typeof window !== 'undefined') {
-      const meta = {
-        nonce: encrypted.nonce,
-        encryptedDek: encrypted.encryptedDeks[0].encryptedDek,
-        ephemeralPublicKey: encrypted.encryptedDeks[0].ephemeralPublicKey,
-        hash: encrypted.hash,
-      };
-      localStorage.setItem(
-        `verarta-file-meta-${completeResult.blockchain_file_id}`,
-        JSON.stringify(meta)
-      );
-    }
+    store.completeUpload(tempId);
 
     return {
-      artworkId: completeResult.blockchain_artwork_id,
-      fileId: completeResult.blockchain_file_id,
+      artworkId,
+      fileId,
     };
   } catch (err) {
     store.failUpload(tempId, err instanceof Error ? err.message : 'Upload failed');

@@ -61,11 +61,13 @@ export function VerifyEmailForm() {
         publicKey = sessionStorage.getItem('verarta_register_pubkey') || '';
       }
 
-      // 3. Create blockchain account
+      // 3. Create blockchain account (with Antelope public key for on-chain identity)
+      const antelopePublicKey = sessionStorage.getItem('verarta_register_antelope_pubkey') || '';
       const result = await createAccount({
         email,
         webauthn_credential_id: credentialId,
         webauthn_public_key: publicKey,
+        antelope_public_key: antelopePublicKey,
       });
 
       // 4. Store session
@@ -85,6 +87,7 @@ export function VerifyEmailForm() {
       sessionStorage.removeItem('verarta_register_email');
       sessionStorage.removeItem('verarta_register_account');
       sessionStorage.removeItem('verarta_register_pubkey');
+      sessionStorage.removeItem('verarta_register_antelope_pubkey');
 
       // 6. Redirect to dashboard
       router.push('/dashboard');

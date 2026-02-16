@@ -2,8 +2,9 @@
 
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { getArtwork, getFileDownloadUrl } from '@/lib/api/artworks';
-import { FileIcon, Download, Loader2 } from 'lucide-react';
+import { getArtwork } from '@/lib/api/artworks';
+import { FileViewer } from '@/components/artwork/FileViewer';
+import { FileIcon, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ArtworkDetailPage() {
@@ -78,13 +79,11 @@ export default function ArtworkDetailPage() {
                   </div>
                 </div>
                 {file.upload_complete && (
-                  <a
-                    href={getFileDownloadUrl(file.id)}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Download
-                  </a>
+                  <FileViewer
+                    fileId={file.id}
+                    filename={file.filename}
+                    mimeType={file.mime_type}
+                  />
                 )}
               </div>
             ))}

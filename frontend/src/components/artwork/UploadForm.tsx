@@ -61,6 +61,7 @@ export function UploadForm() {
         file,
         title: data.title,
         email: user.email,
+        blockchainAccount: user.blockchain_account,
       });
       router.push(`/dashboard/artworks/${result.artworkId}`);
     } catch (err: unknown) {

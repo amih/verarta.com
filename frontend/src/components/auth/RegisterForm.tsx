@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { registerSchema, type RegisterInput } from '@/lib/utils/validation';
 import { register as registerUser } from '@/lib/api/auth';
 import { generateKeyPair, storeKeyPair } from '@/lib/crypto/keys';
+import { generateAntelopeKeyPair, storeAntelopeKey } from '@/lib/crypto/antelope';
 import { Loader2 } from 'lucide-react';
 
 export function RegisterForm() {
@@ -26,19 +27,24 @@ export function RegisterForm() {
     setError('');
     setLoading(true);
     try {
-      // 1. Generate X25519 key pair
+      // 1. Generate X25519 key pair (for encryption)
       const keyPair = await generateKeyPair();
 
-      // 2. Store key pair locally (encrypted in IndexedDB)
-      await storeKeyPair(data.email, keyPair);
+      // 2. Generate Antelope key pair (for blockchain transaction signing)
+      const antelopeKeys = generateAntelopeKeyPair();
 
-      // 3. Register with backend
+      // 3. Store both key pairs locally
+      await storeKeyPair(data.email, keyPair);
+      await storeAntelopeKey(data.email, antelopeKeys.privateKey, antelopeKeys.publicKey);
+
+      // 4. Register with backend
       const result = await registerUser(data);
 
-      // 4. Store email + account for verification page
+      // 5. Store email + account + keys for verification page
       sessionStorage.setItem('verarta_register_email', data.email);
       sessionStorage.setItem('verarta_register_account', result.blockchain_account);
       sessionStorage.setItem('verarta_register_pubkey', keyPair.publicKey);
+      sessionStorage.setItem('verarta_register_antelope_pubkey', antelopeKeys.publicKey);
 
       // 5. Redirect to verification
       router.push('/auth/verify');

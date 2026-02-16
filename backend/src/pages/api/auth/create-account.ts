@@ -3,11 +3,13 @@ import { z } from 'zod';
 import { query } from '../../../lib/db.js';
 import { getAndDelete } from '../../../lib/redis.js';
 import { createSession } from '../../../lib/auth.js';
+import { createBlockchainAccount } from '../../../lib/antelope.js';
 
 const CreateAccountSchema = z.object({
   email: z.string().email('Invalid email address'),
   webauthn_credential_id: z.string().min(1, 'WebAuthn credential ID required'),
   webauthn_public_key: z.string().min(1, 'WebAuthn public key required'),
+  antelope_public_key: z.string().min(1, 'Antelope public key required'),
 });
 
 export const POST: APIRoute = async ({ request, cookies }) => {
@@ -26,7 +28,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       });
     }
 
-    const { email, webauthn_credential_id, webauthn_public_key } = validation.data;
+    const { email, webauthn_credential_id, webauthn_public_key, antelope_public_key } = validation.data;
 
     // Check if email was verified
     const verifiedDataStr = await getAndDelete(`email_verified:${email}`);
@@ -53,6 +55,20 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         error: 'Email already registered',
       }), {
         status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Create blockchain account with user's Antelope public key
+    try {
+      await createBlockchainAccount(verifiedData.blockchain_account, antelope_public_key);
+    } catch (err) {
+      console.error('Blockchain account creation failed:', err);
+      return new Response(JSON.stringify({
+        error: 'Failed to create blockchain account',
+        details: err instanceof Error ? err.message : 'Unknown error',
+      }), {
+        status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
     }
