@@ -52,7 +52,7 @@ function CallbackHandler() {
         setStatus('Setting up encryption keys...');
         const antelopePublicKey = await ensureKeys(user.email);
 
-        // Create blockchain account on-chain if needed
+        // Always attempt blockchain account creation (idempotent — server handles "already exists")
         if (antelopePublicKey) {
           setStatus('Setting up blockchain account...');
           try {
@@ -112,7 +112,7 @@ export default function OAuthCallbackPage() {
   );
 }
 
-// Returns the Antelope public key if a new key was generated (needs on-chain account creation)
+// Returns the Antelope public key (always returned so account creation is retried each login)
 async function ensureKeys(email: string): Promise<string | null> {
   // 1. Ensure X25519 encryption keys
   let localKeys = await getKeyPair(email);
@@ -123,21 +123,30 @@ async function ensureKeys(email: string): Promise<string | null> {
     } else {
       const keyPair = await generateKeyPair();
       await storeKeyPair(email, keyPair);
+    }
+  }
 
+  // Always ensure encryption keys are backed up to server
+  try {
+    const serverKeys = await fetchKeys();
+    if (!serverKeys) {
       const encryptedData = await getEncryptedKeyData(email);
       if (encryptedData) {
         await backupKeys(encryptedData);
       }
     }
+  } catch {
+    // Non-fatal — keys still work locally
   }
 
   // 2. Ensure Antelope signing keys
-  const antelopeKey = await getAntelopeKey(email);
+  let antelopeKey = await getAntelopeKey(email);
   if (!antelopeKey) {
     const { privateKey, publicKey } = generateAntelopeKeyPair();
     await storeAntelopeKey(email, privateKey, publicKey);
-    return publicKey; // new key — needs blockchain account creation
+    antelopeKey = { privateKey, publicKey };
   }
 
-  return null; // keys already existed
+  // Always return the public key so blockchain account creation is retried
+  return antelopeKey.publicKey;
 }
