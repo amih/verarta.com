@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { logout } from '@/lib/api/auth';
-import { LogOut, Upload } from 'lucide-react';
+import { LogOut, ShieldCheck, Upload } from 'lucide-react';
 
 export function Header() {
   const router = useRouter();
@@ -44,6 +44,16 @@ export function Header() {
         </Link>
 
         <nav className="flex items-center gap-4">
+          {user?.is_admin && (
+            <Link
+              href="/dashboard/admin"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Admin
+            </Link>
+          )}
+
           <Link
             href="/dashboard/upload"
             className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
