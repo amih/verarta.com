@@ -4,29 +4,37 @@ import { getTableRows } from '../../../lib/antelope.js';
 
 export const GET: APIRoute = async (context) => {
   try {
-    // Require authentication
     const authResult = await requireAuth(context);
     if (authResult) return authResult;
 
     const user = (context as any).user;
 
-    // Query artworks table from blockchain
-    // Using secondary index to get artworks by owner
+    // Query artworks by owner via secondary index.
+    // upper_bound is exclusive in EOSIO — using lower_bound == upper_bound returns nothing.
+    // Instead, query from lower_bound with a high limit and filter by owner here.
     const result = await getTableRows({
       code: 'verarta.core',
       scope: 'verarta.core',
       table: 'artworks',
-      index_position: 2, // by_owner index
+      index_position: 2,
       key_type: 'name',
       lower_bound: user.blockchainAccount,
-      upper_bound: user.blockchainAccount,
       limit: 1000,
     });
 
+    const artworks = result.rows
+      .filter((row: any) => row.owner === user.blockchainAccount)
+      .map((row: any) => ({
+        id: row.artwork_id,
+        owner: row.owner,
+        title: (() => { try { return atob(row.title_encrypted); } catch { return row.title_encrypted; } })(),
+        created_at: new Date(row.created_at * 1000).toISOString(),
+      }));
+
     return new Response(JSON.stringify({
       success: true,
-      artworks: result.rows,
-      count: result.rows.length,
+      artworks,
+      count: artworks.length,
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

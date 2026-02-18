@@ -39,12 +39,12 @@ export const GET: APIRoute = async (context) => {
       code: 'verarta.core',
       scope: 'verarta.core',
       table: 'artfiles',
-      lower_bound: fileId.toString(),
-      upper_bound: fileId.toString(),
+      key_type: 'i64',
+      lower_bound: id,
       limit: 1,
     });
 
-    if (fileResult.rows.length === 0) {
+    if (fileResult.rows.length === 0 || String(fileResult.rows[0].file_id) !== id) {
       return new Response(JSON.stringify({ error: 'File not found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
@@ -60,33 +60,22 @@ export const GET: APIRoute = async (context) => {
       });
     }
 
-    // Fetch all chunks from blockchain, ordered by chunk_index
-    const allChunks: Buffer[] = [];
+    // Fetch all chunks from blockchain via byfile secondary index, ordered by chunk_index
     const totalChunks = fileMetadata.total_chunks;
+    const chunkResult = await getTableRows({
+      code: 'verarta.core',
+      scope: 'verarta.core',
+      table: 'artchunks',
+      key_type: 'i64',
+      lower_bound: id,
+      upper_bound: (BigInt(id) + 1n).toString(),
+      limit: totalChunks,
+      index_position: 2, // byfile secondary index
+    });
 
-    for (let i = 0; i < totalChunks; i++) {
-      // Query chunks by file using the byfile index
-      const chunkResult = await getTableRows({
-        code: 'verarta.core',
-        scope: 'verarta.core',
-        table: 'artchunks',
-        lower_bound: fileId.toString(),
-        upper_bound: fileId.toString(),
-        limit: totalChunks,
-        index_position: 2, // byfile secondary index
-        key_type: 'i64',
-      });
-
-      if (chunkResult.rows.length > 0) {
-        // Sort by chunk_index and convert
-        const sorted = (chunkResult.rows as any[])
-          .sort((a, b) => a.chunk_index - b.chunk_index);
-        for (const chunk of sorted) {
-          allChunks.push(Buffer.from(chunk.chunk_data, 'base64'));
-        }
-        break; // Got all chunks in one query
-      }
-    }
+    const allChunks: Buffer[] = (chunkResult.rows as any[])
+      .sort((a, b) => a.chunk_index - b.chunk_index)
+      .map((chunk) => Buffer.from(chunk.chunk_data, 'base64'));
 
     if (allChunks.length === 0) {
       return new Response(JSON.stringify({ error: 'No chunks found' }), {

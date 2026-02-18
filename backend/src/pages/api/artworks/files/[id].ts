@@ -32,17 +32,18 @@ export const GET: APIRoute = async ({ params, url }) => {
     const fileId = parseInt(id);
     const metadataOnly = url.searchParams.get('metadata_only') === 'true';
 
-    // Get file metadata from blockchain
+    // Get file metadata from blockchain — primary key lookup, key_type must be
+    // 'i64' or wharfkit defaults to 'name' and the node rejects the numeric bound.
     const fileResult = await getTableRows({
       code: 'verarta.core',
       scope: 'verarta.core',
       table: 'artfiles',
-      lower_bound: fileId.toString(),
-      upper_bound: fileId.toString(),
+      key_type: 'i64',
+      lower_bound: id,
       limit: 1,
     });
 
-    if (fileResult.rows.length === 0) {
+    if (fileResult.rows.length === 0 || String(fileResult.rows[0].file_id) !== id) {
       return new Response(JSON.stringify({
         error: 'File not found',
       }), {
