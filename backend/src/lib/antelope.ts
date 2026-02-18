@@ -3,8 +3,9 @@ import {
   Name,
   Action,
   Transaction,
+  SignedTransaction,
+  PackedTransaction,
   PermissionLevel,
-  Serializer,
   PrivateKey,
   Checksum256,
   TimePointSec,
@@ -125,11 +126,12 @@ export async function buildAndSignTransaction(
   const chainId = Checksum256.from(info.chain_id);
   const signature = serviceKey.signDigest(transaction.signingDigest(chainId));
 
-  // Push
-  const result = await producerClient.v1.chain.push_transaction({
-    signatures: [signature],
-    serializedTransaction: Serializer.encode({ object: transaction }),
-  });
+  // Push — must use PackedTransaction, not a raw object, or wharfkit will try
+  // to decode it as SignedTransaction and fail looking for 'expiration'.
+  const signedTx = SignedTransaction.from({ ...transaction, signatures: [signature] });
+  const result = await producerClient.v1.chain.push_transaction(
+    PackedTransaction.fromSigned(signedTx)
+  );
 
   return { transaction_id: String(result.transaction_id) };
 }
@@ -181,18 +183,6 @@ export async function createBlockchainAccount(
     },
   }, systemAbi);
 
-  // Buy RAM for the new account
-  const buyRamAction = Action.from({
-    account: systemAccount,
-    name: Name.from('buyrambytes'),
-    authorization: [auth],
-    data: {
-      payer: contractAccount,
-      receiver: Name.from(accountName),
-      bytes: 8192,
-    },
-  }, systemAbi);
-
   const expiration = TimePointSec.fromMilliseconds(
     info.head_block_time.toMilliseconds() + 60000
   );
@@ -204,14 +194,18 @@ export async function createBlockchainAccount(
       (val: number, byte: number, i: number) => val | (byte << (i * 8)),
       0
     ) >>> 0,
-    actions: [newAccountAction, buyRamAction],
+    actions: [newAccountAction],
   });
 
   const chainId = Checksum256.from(info.chain_id);
   const signature = serviceKey.signDigest(transaction.signingDigest(chainId));
 
-  await producerClient.v1.chain.push_transaction({
+  const signedTx = SignedTransaction.from({
+    ...transaction,
     signatures: [signature],
-    serializedTransaction: Serializer.encode({ object: transaction }),
   });
+
+  await producerClient.v1.chain.push_transaction(
+    PackedTransaction.fromSigned(signedTx)
+  );
 }

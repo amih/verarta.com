@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
+import { PackedTransaction, Bytes, Signature } from '@wharfkit/antelope';
 import { requireAuth } from '../../../middleware/auth.js';
 import { pushTransaction } from '../../../lib/antelope.js';
 
@@ -30,11 +31,17 @@ export const POST: APIRoute = async (context) => {
 
     const { signatures, serializedTransaction } = validation.data;
 
-    // Push signed transaction to blockchain
-    const result = await pushTransaction({
-      signatures,
-      serializedTransaction: Uint8Array.from(Buffer.from(serializedTransaction, 'hex')),
+    // Construct a proper PackedTransaction so wharfkit doesn't try to
+    // interpret the raw object as a SignedTransaction (which would look for
+    // expiration/actions/etc. fields and fail with "undefined expiration").
+    const packedTx = PackedTransaction.from({
+      signatures: signatures.map(s => Signature.from(s)),
+      compression: 0,
+      packed_context_free_data: Bytes.from('', 'hex'),
+      packed_trx: Bytes.from(serializedTransaction, 'hex'),
     });
+
+    const result = await pushTransaction(packedTx);
 
     return new Response(JSON.stringify({
       success: true,

@@ -153,8 +153,10 @@ void verartatoken::uploadchunk(
    auto file_index_itr = by_file_index.find(file_index_key);
    check(file_index_itr == by_file_index.end(), "chunk_index already uploaded for this file");
 
-   // Create chunk record
-   artchunks.emplace(owner, [&](auto& row) {
+   // Create chunk record — use get_self() as RAM payer so the service key
+   // can sign without requiring the user to co-sign for RAM allocation.
+   name ram_payer = has_auth(get_self()) ? get_self() : owner;
+   artchunks.emplace(ram_payer, [&](auto& row) {
       row.chunk_id = chunk_id;
       row.file_id = file_id;
       row.owner = owner;
@@ -165,7 +167,7 @@ void verartatoken::uploadchunk(
    });
 
    // Increment uploaded_chunks counter
-   artfiles.modify(file_itr, owner, [&](auto& row) {
+   artfiles.modify(file_itr, same_payer, [&](auto& row) {
       row.uploaded_chunks++;
    });
 }
@@ -192,8 +194,8 @@ void verartatoken::completefile(
    // Verify all chunks uploaded
    check(file_itr->uploaded_chunks == total_chunks, "not all chunks uploaded");
 
-   // Mark file as complete
-   artfiles.modify(file_itr, owner, [&](auto& row) {
+   // Mark file as complete — use same_payer since we're not adding RAM.
+   artfiles.modify(file_itr, same_payer, [&](auto& row) {
       row.total_chunks = total_chunks;
       row.upload_complete = true;
       row.completed_at = eosio::current_block_time().to_time_point().sec_since_epoch();
