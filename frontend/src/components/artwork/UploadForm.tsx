@@ -74,6 +74,16 @@ export function UploadForm() {
         email: user.email,
         blockchainAccount: user.blockchain_account,
       });
+
+      // Poll until the history node has indexed the artwork (producer→history sync lag)
+      for (let i = 0; i < 8; i++) {
+        await new Promise(r => setTimeout(r, 800));
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/artworks/${result.artworkId}`);
+          if (res.ok) break;
+        } catch { /* keep polling */ }
+      }
+
       router.push(`/dashboard/artworks/${result.artworkId}`);
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {

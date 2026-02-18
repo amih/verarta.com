@@ -51,11 +51,12 @@ export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileView
         code: 'verarta.core',
         scope: 'verarta.core',
         table: 'artfiles',
+        key_type: 'i64',
         lower_bound: fileId.toString(),
         limit: 1,
       });
 
-      if (tableResult.rows.length === 0 || Number(tableResult.rows[0].file_id) !== fileId) {
+      if (tableResult.rows.length === 0 || String(tableResult.rows[0].file_id) !== String(fileId)) {
         throw new Error('File metadata not found on chain');
       }
 
