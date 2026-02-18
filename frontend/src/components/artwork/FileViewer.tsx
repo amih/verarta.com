@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { decryptFile, verifyFileHash } from '@/lib/crypto/encryption';
 import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
 import { fetchKeys } from '@/lib/api/auth';
@@ -13,6 +13,7 @@ interface FileViewerProps {
   fileId: number;
   filename: string;
   mimeType: string;
+  autoDecrypt?: boolean;
 }
 
 interface OnChainFileMetadata {
@@ -25,7 +26,7 @@ interface OnChainFileMetadata {
   filename_encrypted: string;
 }
 
-export function FileViewer({ fileId, filename, mimeType }: FileViewerProps) {
+export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileViewerProps) {
   const user = useAuthStore((s) => s.user);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -44,17 +45,17 @@ export function FileViewer({ fileId, filename, mimeType }: FileViewerProps) {
     setError('');
 
     try {
-      // 1. Fetch encryption metadata from on-chain artfiles table
+      // 1. Fetch encryption metadata from on-chain artfiles table.
+      // upper_bound is exclusive — use limit 1 and verify the returned row matches.
       const tableResult = await queryTable<OnChainFileMetadata>({
         code: 'verarta.core',
         scope: 'verarta.core',
         table: 'artfiles',
         lower_bound: fileId.toString(),
-        upper_bound: fileId.toString(),
         limit: 1,
       });
 
-      if (tableResult.rows.length === 0) {
+      if (tableResult.rows.length === 0 || Number(tableResult.rows[0].file_id) !== fileId) {
         throw new Error('File metadata not found on chain');
       }
 
@@ -113,6 +114,12 @@ export function FileViewer({ fileId, filename, mimeType }: FileViewerProps) {
     }
   }, [fileId, mimeType, user, decryptedUrl]);
 
+  useEffect(() => {
+    if (autoDecrypt && user && !decryptedUrl) {
+      handleDecrypt();
+    }
+  }, [autoDecrypt, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleDownload = useCallback(() => {
     if (!decryptedUrl) return;
     const a = document.createElement('a');
@@ -125,10 +132,16 @@ export function FileViewer({ fileId, filename, mimeType }: FileViewerProps) {
   if (decryptedUrl && isImage) {
     return (
       <div className="space-y-3">
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Decrypting…
+          </div>
+        )}
         <img
           src={decryptedUrl}
           alt={filename}
-          className="max-h-96 rounded-lg border border-zinc-200 dark:border-zinc-700"
+          className="w-full rounded-lg object-contain"
         />
         <button
           onClick={handleDownload}
@@ -137,6 +150,16 @@ export function FileViewer({ fileId, filename, mimeType }: FileViewerProps) {
           <Download className="h-3.5 w-3.5" />
           Download
         </button>
+      </div>
+    );
+  }
+
+  // While auto-decrypting, show a spinner instead of the button
+  if (autoDecrypt && loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Decrypting image…
       </div>
     );
   }

@@ -53,6 +53,23 @@ export default function ArtworkDetailPage() {
         </p>
       </div>
 
+      {(() => {
+        const imageFile = artwork.files.find(
+          (f) => f.mime_type?.startsWith('image/') && f.upload_complete
+        );
+        if (!imageFile) return null;
+        return (
+          <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <FileViewer
+              fileId={imageFile.id}
+              filename={imageFile.filename}
+              mimeType={imageFile.mime_type}
+              autoDecrypt
+            />
+          </div>
+        );
+      })()}
+
       {artwork.files.length > 0 && (
         <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">Files</h2>
