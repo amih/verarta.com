@@ -7,31 +7,31 @@ import {
   Serializer,
   Checksum256,
   TimePointSec,
-  APIClient,
 } from '@wharfkit/antelope';
 import { getChainInfo } from '@/lib/api/chain';
+import { apiClient } from '@/lib/api/client';
 
 const CONTRACT_ACCOUNT = 'verarta.core';
 
-// Use the backend's chain proxy to get ABI (avoids CORS issues with direct chain access)
+// Fetch ABI through the backend proxy (the chain node is not publicly exposed)
 let cachedAbi: any = null;
 
 async function getContractAbi() {
   if (cachedAbi) return cachedAbi;
-  const client = new APIClient({
-    url: process.env.NEXT_PUBLIC_CHAIN_URL || 'http://localhost:8888',
-  });
-  const { abi } = await client.v1.chain.get_abi(Name.from(CONTRACT_ACCOUNT));
-  if (!abi) throw new Error('Failed to fetch contract ABI');
-  cachedAbi = abi;
-  return abi;
+  const res = await apiClient.get<{ success: true; abi: any }>('/api/chain/abi');
+  cachedAbi = res.data.abi;
+  return cachedAbi;
 }
 
+// Fetch chain info through the backend proxy and reconstruct wharfkit types
 async function getChainInfoDirect() {
-  const client = new APIClient({
-    url: process.env.NEXT_PUBLIC_CHAIN_URL || 'http://localhost:8888',
-  });
-  return await client.v1.chain.get_info();
+  const { chain_info } = await getChainInfo();
+  return {
+    head_block_time: TimePointSec.from(chain_info.head_block_time),
+    head_block_num: { value: chain_info.head_block_num },
+    head_block_id: Checksum256.from(chain_info.head_block_id),
+    chain_id: chain_info.chain_id,
+  };
 }
 
 /**
