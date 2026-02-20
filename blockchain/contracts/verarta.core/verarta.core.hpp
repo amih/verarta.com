@@ -138,6 +138,17 @@ public:
    void rmadminkey(uint64_t key_id);
 
    /**
+    * Append a new admin DEK to an existing file (for re-keying)
+    * @param file_id - File ID to update
+    * @param new_encrypted_dek - DEK encrypted with the new admin's public key
+    */
+   [[eosio::action]]
+   void addadmindek(
+      uint64_t file_id,
+      std::string new_encrypted_dek
+   );
+
+   /**
     * Log admin access to encrypted file (for audit trail)
     * @param admin_account - Admin accessing the file
     * @param file_id - File being accessed
@@ -159,6 +170,40 @@ public:
    void deleteart(
       uint64_t artwork_id,
       name owner
+   );
+
+   /**
+    * Update on-chain metadata for an existing artwork
+    * @param artwork_id - Artwork ID to update
+    * @param owner - Owner account (must match)
+    * @param description_encrypted - New encrypted description (base64); empty string leaves unchanged
+    * @param metadata_encrypted - New encrypted JSON metadata (base64); empty string leaves unchanged
+    */
+   [[eosio::action]]
+   void updateart(
+      uint64_t artwork_id,
+      name owner,
+      std::string description_encrypted,
+      std::string metadata_encrypted
+   );
+
+   /**
+    * Transfer artwork ownership with re-encrypted DEKs
+    * @param artwork_id - Artwork ID to transfer
+    * @param from - Current owner account
+    * @param to - Recipient account
+    * @param file_ids - IDs of files to update (all upload_complete files)
+    * @param new_encrypted_deks - DEKs re-encrypted for the recipient's X25519 key
+    * @param new_auth_tags - New ephemeral public keys (auth_tag) for each file
+    */
+   [[eosio::action]]
+   void transferart(
+      uint64_t artwork_id,
+      name from,
+      name to,
+      std::vector<uint64_t> file_ids,
+      std::vector<std::string> new_encrypted_deks,
+      std::vector<std::string> new_auth_tags
    );
 
    // ========== TABLES ==========

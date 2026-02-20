@@ -399,6 +399,91 @@ void verartatoken::deleteart(
    artworks.erase(artwork_itr);
 }
 
+void verartatoken::transferart(
+   uint64_t artwork_id,
+   name from,
+   name to,
+   std::vector<uint64_t> file_ids,
+   std::vector<std::string> new_encrypted_deks,
+   std::vector<std::string> new_auth_tags
+) {
+   require_auth(from);
+
+   check(from != to, "cannot transfer to self");
+   check(file_ids.size() == new_encrypted_deks.size(), "file_ids and new_encrypted_deks size mismatch");
+   check(file_ids.size() == new_auth_tags.size(), "file_ids and new_auth_tags size mismatch");
+
+   artworks_table artworks(get_self(), get_self().value);
+   artfiles_table artfiles(get_self(), get_self().value);
+
+   // Verify artwork exists and from is the owner
+   auto artwork_itr = artworks.find(artwork_id);
+   check(artwork_itr != artworks.end(), "artwork not found");
+   check(artwork_itr->owner == from, "artwork owner mismatch");
+
+   // Update each file's owner and re-encrypted DEK
+   for (size_t i = 0; i < file_ids.size(); ++i) {
+      auto file_itr = artfiles.find(file_ids[i]);
+      check(file_itr != artfiles.end(), "file not found");
+      check(file_itr->artwork_id == artwork_id, "file does not belong to artwork");
+      check(file_itr->owner == from, "file owner mismatch");
+
+      artfiles.modify(file_itr, same_payer, [&](auto& row) {
+         row.owner = to;
+         row.encrypted_dek = new_encrypted_deks[i];
+         row.auth_tag = new_auth_tags[i];
+      });
+   }
+
+   // Transfer artwork ownership
+   artworks.modify(artwork_itr, same_payer, [&](auto& row) {
+      row.owner = to;
+   });
+}
+
+void verartatoken::updateart(
+   uint64_t artwork_id,
+   name owner,
+   std::string description_encrypted,
+   std::string metadata_encrypted
+) {
+   // Allow the owner directly, or the contract's service key (for backend-initiated updates)
+   check(has_auth(owner) || has_auth(get_self()), "missing required authority");
+
+   check(artwork_id > 0, "artwork_id must be positive");
+   check(description_encrypted.size() <= 10240, "description_encrypted too long");
+   check(metadata_encrypted.size() <= 10240, "metadata_encrypted too long");
+
+   artworks_table artworks(get_self(), get_self().value);
+   auto artwork_itr = artworks.find(artwork_id);
+   check(artwork_itr != artworks.end(), "artwork not found");
+   check(artwork_itr->owner == owner, "artwork owner mismatch");
+
+   artworks.modify(artwork_itr, same_payer, [&](auto& row) {
+      row.description_encrypted = description_encrypted;
+      row.metadata_encrypted = metadata_encrypted;
+   });
+}
+
+void verartatoken::addadmindek(uint64_t file_id, std::string new_encrypted_dek) {
+   require_auth(get_self()); // service key only
+
+   check(file_id > 0, "file_id must be positive");
+   check(new_encrypted_dek.size() > 0, "new_encrypted_dek cannot be empty");
+
+   artfiles_table artfiles(get_self(), get_self().value);
+   auto it = artfiles.find(file_id);
+   check(it != artfiles.end(), "file not found");
+
+   auto active_admin_keys = get_active_admin_keys();
+   check(it->admin_encrypted_deks.size() < active_admin_keys.size(),
+         "file already has DEKs for all active admin keys");
+
+   artfiles.modify(it, same_payer, [&](auto& row) {
+      row.admin_encrypted_deks.push_back(new_encrypted_dek);
+   });
+}
+
 // ========== PRIVATE HELPER FUNCTIONS ==========
 
 void verartatoken::check_and_update_quota(name account, uint64_t file_size) {
@@ -530,4 +615,4 @@ uint64_t verartatoken::calculate_next_monday(uint64_t from_time) {
 } // namespace verarta
 
 // Dispatch actions
-EOSIO_DISPATCH(verarta::verartatoken, (createart)(addfile)(uploadchunk)(completefile)(setquota)(addadminkey)(rmadminkey)(logaccess)(deleteart))
+EOSIO_DISPATCH(verarta::verartatoken, (createart)(updateart)(addfile)(uploadchunk)(completefile)(setquota)(addadminkey)(rmadminkey)(addadmindek)(logaccess)(deleteart)(transferart))
