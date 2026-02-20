@@ -7,6 +7,9 @@ const StoreKeysSchema = z.object({
   publicKey: z.string().min(1),
   encryptedPrivateKey: z.string().min(1),
   nonce: z.string().min(1),
+  antelopePublicKey: z.string().min(1).optional(),
+  antelopeEncryptedPrivateKey: z.string().min(1).optional(),
+  antelopeKeyNonce: z.string().min(1).optional(),
 });
 
 // GET: Retrieve backed-up encryption keys
@@ -18,7 +21,8 @@ export const GET: APIRoute = async (context) => {
     const user = (context as any).user;
 
     const result = await query(
-      `SELECT encryption_public_key, encrypted_private_key, key_nonce
+      `SELECT encryption_public_key, encrypted_private_key, key_nonce,
+              antelope_public_key, antelope_encrypted_private_key, antelope_key_nonce
        FROM users WHERE id = $1`,
       [user.userId]
     );
@@ -36,6 +40,9 @@ export const GET: APIRoute = async (context) => {
       publicKey: row.encryption_public_key,
       encryptedPrivateKey: row.encrypted_private_key,
       nonce: row.key_nonce,
+      antelopePublicKey: row.antelope_public_key || undefined,
+      antelopeEncryptedPrivateKey: row.antelope_encrypted_private_key || undefined,
+      antelopeKeyNonce: row.antelope_key_nonce || undefined,
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -69,13 +76,16 @@ export const POST: APIRoute = async (context) => {
       });
     }
 
-    const { publicKey, encryptedPrivateKey, nonce } = validation.data;
+    const { publicKey, encryptedPrivateKey, nonce, antelopePublicKey, antelopeEncryptedPrivateKey, antelopeKeyNonce } = validation.data;
 
     await query(
       `UPDATE users
-       SET encryption_public_key = $1, encrypted_private_key = $2, key_nonce = $3
-       WHERE id = $4`,
-      [publicKey, encryptedPrivateKey, nonce, user.userId]
+       SET encryption_public_key = $1, encrypted_private_key = $2, key_nonce = $3,
+           antelope_public_key = COALESCE(antelope_public_key, $4),
+           antelope_encrypted_private_key = COALESCE(antelope_encrypted_private_key, $5),
+           antelope_key_nonce = COALESCE(antelope_key_nonce, $6)
+       WHERE id = $7`,
+      [publicKey, encryptedPrivateKey, nonce, antelopePublicKey || null, antelopeEncryptedPrivateKey || null, antelopeKeyNonce || null, user.userId]
     );
 
     return new Response(JSON.stringify({ success: true }), {

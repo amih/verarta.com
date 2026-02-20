@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/auth';
 import { getSession, backupKeys, fetchKeys } from '@/lib/api/auth';
 import { apiClient } from '@/lib/api/client';
 import { generateKeyPair, getKeyPair, storeKeyPair, importEncryptedKeyData, getEncryptedKeyData } from '@/lib/crypto/keys';
-import { generateAntelopeKeyPair, getAntelopeKey, storeAntelopeKey } from '@/lib/crypto/antelope';
+import { generateAntelopeKeyPair, getAntelopeKey, storeAntelopeKey, getEncryptedAntelopeKeyData, importEncryptedAntelopeKeyData } from '@/lib/crypto/antelope';
 
 function CallbackHandler() {
   const router = useRouter();
@@ -143,9 +143,38 @@ async function ensureKeys(email: string): Promise<string | null> {
   // 2. Ensure Antelope signing keys
   let antelopeKey = await getAntelopeKey(email);
   if (!antelopeKey) {
-    const { privateKey, publicKey } = generateAntelopeKeyPair();
-    await storeAntelopeKey(email, privateKey, publicKey);
-    antelopeKey = { privateKey, publicKey };
+    // Try restoring from server first
+    const serverKeys = await fetchKeys();
+    if (serverKeys?.antelopeEncryptedPrivateKey && serverKeys?.antelopePublicKey && serverKeys?.antelopeKeyNonce) {
+      await importEncryptedAntelopeKeyData(email, {
+        antelopePublicKey: serverKeys.antelopePublicKey,
+        antelopeEncryptedPrivateKey: serverKeys.antelopeEncryptedPrivateKey,
+        antelopeKeyNonce: serverKeys.antelopeKeyNonce,
+      });
+      antelopeKey = await getAntelopeKey(email);
+    }
+    if (!antelopeKey) {
+      // Generate new as last resort
+      const { privateKey, publicKey } = generateAntelopeKeyPair();
+      await storeAntelopeKey(email, privateKey, publicKey);
+      antelopeKey = { privateKey, publicKey };
+    }
+  }
+
+  // Backup Antelope keys to server if not already there
+  try {
+    const antelopeData = await getEncryptedAntelopeKeyData(email);
+    if (antelopeData) {
+      const currentServerKeys = await fetchKeys();
+      if (!currentServerKeys?.antelopeEncryptedPrivateKey) {
+        const encryptedData = await getEncryptedKeyData(email);
+        if (encryptedData) {
+          await backupKeys({ ...encryptedData, ...antelopeData });
+        }
+      }
+    }
+  } catch {
+    // Non-fatal
   }
 
   // Always return the public key so blockchain account creation is retried

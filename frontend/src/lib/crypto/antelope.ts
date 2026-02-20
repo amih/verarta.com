@@ -8,6 +8,7 @@ import {
   Checksum256,
   TimePointSec,
 } from '@wharfkit/antelope';
+import sodium from 'libsodium-wrappers';
 import { getChainInfo } from '@/lib/api/chain';
 import { apiClient } from '@/lib/api/client';
 
@@ -32,6 +33,24 @@ async function getChainInfoDirect() {
     head_block_id: Checksum256.from(chain_info.head_block_id),
     chain_id: chain_info.chain_id,
   };
+}
+
+let sodiumReady = false;
+
+async function ensureSodium() {
+  if (!sodiumReady) {
+    await sodium.ready;
+    sodiumReady = true;
+  }
+}
+
+function deriveKey(email: string): Uint8Array {
+  const salt = sodium.from_string(email);
+  return sodium.crypto_generichash(
+    sodium.crypto_secretbox_KEYBYTES,
+    sodium.from_string('verarta-antelope-key'),
+    salt
+  );
 }
 
 /**
@@ -72,18 +91,26 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Store an Antelope private key in IndexedDB (encrypted with email-derived key).
+ * Store an Antelope private key in IndexedDB (encrypted with email-derived key via crypto_secretbox).
  */
 export async function storeAntelopeKey(email: string, privateKey: string, publicKey: string): Promise<void> {
-  // Simple obfuscation for local storage - same pattern as X25519 keys
-  const encoded = btoa(privateKey);
+  await ensureSodium();
+  const key = deriveKey(email);
+  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+  const encrypted = sodium.crypto_secretbox_easy(
+    sodium.from_string(privateKey),
+    nonce,
+    key
+  );
+
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).put({
       email,
       publicKey,
-      encryptedPrivateKey: encoded,
+      encryptedPrivateKey: sodium.to_base64(encrypted, sodium.base64_variants.ORIGINAL),
+      nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
     });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -92,15 +119,18 @@ export async function storeAntelopeKey(email: string, privateKey: string, public
 
 /**
  * Retrieve the Antelope key pair from IndexedDB.
+ * Handles migration from old btoa format (no nonce field) to crypto_secretbox.
  */
 export async function getAntelopeKey(email: string): Promise<{
   privateKey: string;
   publicKey: string;
 } | null> {
+  await ensureSodium();
   const db = await openDB();
   const stored = await new Promise<{
     publicKey: string;
     encryptedPrivateKey: string;
+    nonce?: string;
   } | undefined>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const request = tx.objectStore(STORE_NAME).get(email);
@@ -110,10 +140,80 @@ export async function getAntelopeKey(email: string): Promise<{
 
   if (!stored) return null;
 
+  // Migration: old format has no nonce field (btoa-encoded)
+  if (!stored.nonce) {
+    const privateKey = atob(stored.encryptedPrivateKey);
+    // Re-encrypt with crypto_secretbox and store
+    await storeAntelopeKey(email, privateKey, stored.publicKey);
+    return { privateKey, publicKey: stored.publicKey };
+  }
+
+  const key = deriveKey(email);
+  const nonce = sodium.from_base64(stored.nonce, sodium.base64_variants.ORIGINAL);
+  const encrypted = sodium.from_base64(stored.encryptedPrivateKey, sodium.base64_variants.ORIGINAL);
+
+  let privateKeyBytes: Uint8Array;
+  try {
+    privateKeyBytes = sodium.crypto_secretbox_open_easy(encrypted, nonce, key);
+  } catch (err) {
+    throw new Error(`getAntelopeKey: crypto_secretbox_open_easy failed: ${err}`);
+  }
+
   return {
-    privateKey: atob(stored.encryptedPrivateKey),
+    privateKey: sodium.to_string(privateKeyBytes),
     publicKey: stored.publicKey,
   };
+}
+
+/**
+ * Get encrypted Antelope key data from IndexedDB (for server backup).
+ */
+export async function getEncryptedAntelopeKeyData(email: string): Promise<{
+  antelopePublicKey: string;
+  antelopeEncryptedPrivateKey: string;
+  antelopeKeyNonce: string;
+} | null> {
+  await ensureSodium();
+  const db = await openDB();
+  const stored = await new Promise<{
+    publicKey: string;
+    encryptedPrivateKey: string;
+    nonce?: string;
+  } | undefined>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const request = tx.objectStore(STORE_NAME).get(email);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+  if (!stored || !stored.nonce) return null;
+
+  return {
+    antelopePublicKey: stored.publicKey,
+    antelopeEncryptedPrivateKey: stored.encryptedPrivateKey,
+    antelopeKeyNonce: stored.nonce,
+  };
+}
+
+/**
+ * Import encrypted Antelope key data from server backup into local IndexedDB.
+ */
+export async function importEncryptedAntelopeKeyData(
+  email: string,
+  data: { antelopePublicKey: string; antelopeEncryptedPrivateKey: string; antelopeKeyNonce: string }
+): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({
+      email,
+      publicKey: data.antelopePublicKey,
+      encryptedPrivateKey: data.antelopeEncryptedPrivateKey,
+      nonce: data.antelopeKeyNonce,
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 /**

@@ -51,6 +51,9 @@ export async function backupKeys(data: {
   publicKey: string;
   encryptedPrivateKey: string;
   nonce: string;
+  antelopePublicKey?: string;
+  antelopeEncryptedPrivateKey?: string;
+  antelopeKeyNonce?: string;
 }): Promise<void> {
   await apiClient.post('/api/auth/keys', data);
 }
@@ -59,6 +62,9 @@ export async function fetchKeys(): Promise<{
   publicKey: string;
   encryptedPrivateKey: string;
   nonce: string;
+  antelopePublicKey?: string;
+  antelopeEncryptedPrivateKey?: string;
+  antelopeKeyNonce?: string;
 } | null> {
   try {
     const res = await apiClient.get('/api/auth/keys');

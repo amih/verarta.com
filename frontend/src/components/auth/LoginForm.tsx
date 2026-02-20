@@ -8,6 +8,7 @@ import { loginSchema, type LoginInput } from '@/lib/utils/validation';
 import { login, fetchKeys } from '@/lib/api/auth';
 import { authenticateWebAuthn, isWebAuthnSupported } from '@/lib/crypto/webauthn';
 import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
+import { getAntelopeKey, importEncryptedAntelopeKeyData } from '@/lib/crypto/antelope';
 import { useAuthStore } from '@/store/auth';
 import { Loader2 } from 'lucide-react';
 
@@ -56,6 +57,23 @@ export function LoginForm() {
         }
       } catch (e) {
         console.warn('Failed to restore encryption keys:', e);
+      }
+
+      // 3c. Restore Antelope signing keys if missing locally
+      try {
+        const antelopeKey = await getAntelopeKey(data.email);
+        if (!antelopeKey) {
+          const serverKeys = await fetchKeys();
+          if (serverKeys?.antelopeEncryptedPrivateKey && serverKeys?.antelopePublicKey && serverKeys?.antelopeKeyNonce) {
+            await importEncryptedAntelopeKeyData(data.email, {
+              antelopePublicKey: serverKeys.antelopePublicKey,
+              antelopeEncryptedPrivateKey: serverKeys.antelopeEncryptedPrivateKey,
+              antelopeKeyNonce: serverKeys.antelopeKeyNonce,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to restore Antelope keys:', e);
       }
 
       // 4. Redirect to dashboard

@@ -8,6 +8,7 @@ import { verifyEmailSchema, type VerifyEmailInput } from '@/lib/utils/validation
 import { verifyEmail, createAccount, backupKeys } from '@/lib/api/auth';
 import { registerWebAuthnCredential, isWebAuthnSupported } from '@/lib/crypto/webauthn';
 import { getEncryptedKeyData } from '@/lib/crypto/keys';
+import { getEncryptedAntelopeKeyData } from '@/lib/crypto/antelope';
 import { useAuthStore } from '@/store/auth';
 import { Loader2 } from 'lucide-react';
 
@@ -73,11 +74,12 @@ export function VerifyEmailForm() {
       // 4. Store session
       loginStore(result.user, result.token);
 
-      // 4b. Backup encryption keys to server
+      // 4b. Backup encryption keys (X25519 + Antelope) to server
       try {
         const keyData = await getEncryptedKeyData(email);
         if (keyData) {
-          await backupKeys(keyData);
+          const antelopeData = await getEncryptedAntelopeKeyData(email);
+          await backupKeys({ ...keyData, ...antelopeData });
         }
       } catch (e) {
         console.warn('Failed to backup encryption keys:', e);
