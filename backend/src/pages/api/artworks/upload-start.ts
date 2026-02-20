@@ -17,7 +17,7 @@ import { buildAndSignTransaction, CHAIN_CONFIG } from '../../../lib/antelope.js'
 const UploadStartSchema = z.object({
   artwork_id: z.number().int().positive(),
   file_id: z.number().int().positive(),
-  title: z.string().min(1).max(255),
+  title: z.string().max(255).default(''),
   filename: z.string().min(1).max(255),
   mime_type: z.string().min(1).max(100),
   file_data: z.string().min(1), // base64-encoded encrypted ciphertext
