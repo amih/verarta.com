@@ -121,7 +121,7 @@ services:
   # ──────────────────────────────────────────────────────────────
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.0.1
     container_name: verarta-elasticsearch
     environment:
       - discovery.type=single-node
@@ -218,45 +218,46 @@ services:
       retries: 5
 
   # ──────────────────────────────────────────────────────────────
-  # Hyperion Indexer + API (commented out - requires custom build)
+  # Hyperion Indexer + API
+  # Requires building the image first — see deployment/DEPLOYMENT_GUIDE.md Step 5b
   # ──────────────────────────────────────────────────────────────
 
-  # hyperion-indexer:
-  #   image: verarta/hyperion:latest
-  #   container_name: verarta-hyperion-indexer
-  #   depends_on:
-  #     elasticsearch:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     mongodb:
-  #       condition: service_healthy
-  #     history:
-  #       condition: service_started
-  #   volumes:
-  #     - ./blockchain/hyperion/config:/hyperion-history-api/chains:ro
-  #     - ./blockchain/hyperion/connections.json:/hyperion-history-api/connections.json:ro
-  #   networks:
-  #     - verarta-net
-  #   restart: unless-stopped
-  #   command: ./run.sh verarta-indexer
+  hyperion-indexer:
+    image: verarta/hyperion:latest
+    container_name: verarta-hyperion-indexer
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      history:
+        condition: service_started
+    volumes:
+      - ./blockchain/hyperion/config:/hyperion-history-api/config/chains:ro
+      - ./blockchain/hyperion/connections.json:/hyperion-history-api/config/connections.json:ro
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    command: ["pm2-runtime", "start", "pm2/ecosystem.config.cjs", "--only", "verarta-indexer"]
 
-  # hyperion-api:
-  #   image: verarta/hyperion:latest
-  #   container_name: verarta-hyperion-api
-  #   depends_on:
-  #     - hyperion-indexer
-  #   ports:
-  #     - "7000:7000"
-  #   volumes:
-  #     - ./blockchain/hyperion/config:/hyperion-history-api/chains:ro
-  #     - ./blockchain/hyperion/connections.json:/hyperion-history-api/connections.json:ro
-  #   networks:
-  #     - verarta-net
-  #   restart: unless-stopped
-  #   command: ./run.sh verarta-api
+  hyperion-api:
+    image: verarta/hyperion:latest
+    container_name: verarta-hyperion-api
+    depends_on:
+      - hyperion-indexer
+    ports:
+      - "7000:7000"
+    volumes:
+      - ./blockchain/hyperion/config:/hyperion-history-api/config/chains:ro
+      - ./blockchain/hyperion/connections.json:/hyperion-history-api/config/connections.json:ro
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    command: ["pm2-runtime", "start", "pm2/ecosystem.config.cjs", "--only", "verarta-api"]
 
   # ──────────────────────────────────────────────────────────────
   # Wallet (keosd) — for development and bootstrap only

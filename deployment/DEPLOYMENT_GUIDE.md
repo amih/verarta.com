@@ -143,6 +143,71 @@ Save and exit (Ctrl+X, Y, Enter).
 
 ---
 
+## Step 5b: Build the Hyperion Docker Image
+
+There is no pre-built image for Hyperion on this stack. It must be built from the official source on the server.
+
+```bash
+# Clone Hyperion source (only needed once)
+git clone https://github.com/eosrio/hyperion-history-api /opt/hyperion
+```
+
+The `blockchain/hyperion/Dockerfile` in this repo is already pre-written for this setup. Copy it and build:
+
+```bash
+cp /opt/verarta/app/blockchain/hyperion/Dockerfile /opt/hyperion/Dockerfile
+sudo docker build -t verarta/hyperion:latest /opt/hyperion
+```
+
+> **Why ubuntu:24.04?** The `@eosrio/node-abieos` native addon requires `GLIBCXX_3.4.32`.
+> `node:22-slim` and `node:22-bookworm` only ship `GLIBCXX_3.4.30` — too old.
+> `ubuntu:24.04` provides the correct version.
+
+> **Note:** This takes 10–20 minutes. The image is ~2.4 GB. Build only needs to happen once per server; the image persists across restarts.
+
+### Hyperion requires Elasticsearch 9.x
+
+Hyperion 4.x uses `@elastic/elasticsearch@9.x` which sends `compatible-with=9` API headers that **Elasticsearch 8.x rejects**. The `docker-compose.yml` already pins ES to `9.0.1` — do not downgrade it.
+
+### Fill in the chain ID
+
+Before starting Hyperion, update the chain ID in both config files:
+
+```bash
+# Get the actual chain ID from your running blockchain
+CHAIN_ID=$(curl -s http://localhost:8000/v1/chain/get_info | python3 -c "import sys,json; print(json.load(sys.stdin)['chain_id'])")
+echo "Chain ID: $CHAIN_ID"
+
+# Substitute into both config files
+sed -i "s/REPLACE_WITH_CHAIN_ID_FROM_GENESIS/$CHAIN_ID/" \
+  /opt/verarta/app/blockchain/hyperion/connections.json \
+  /opt/verarta/app/blockchain/hyperion/config/verarta.config.json
+```
+
+> **Already done** for this deployment. The real chain ID is:
+> `96f99757daf05efb9ed0f8bb675e643e4954a5b6c4c017a25a184ea27f0394cc`
+
+### Start Hyperion
+
+```bash
+cd /opt/verarta/app
+docker compose up -d hyperion-indexer hyperion-api
+
+# Verify health (wait ~30s for startup)
+curl -s http://localhost:7000/v2/health | python3 -m json.tool
+```
+
+Expected: `StateHistory`, `RabbitMq`, and `NodeosRPC` all `"OK"`. The `Elasticsearch` entry will show `"Error"` until the first contract action is indexed — this is normal.
+
+### Hyperion Docker network
+
+The `docker-compose.yml` declares `verarta-net` as an **external** network named `verartacom_verarta-net`. This means:
+- Hyperion containers automatically join the correct network on every start/restart
+- No manual `docker network connect` commands needed
+- If you ever recreate the compose project from scratch, ensure the `verartacom_verarta-net` network exists first (it is created by the main compose project in `/home/ubuntu/dev/verarta.com`)
+
+---
+
 ## Step 6: Bootstrap the Blockchain
 
 ```bash

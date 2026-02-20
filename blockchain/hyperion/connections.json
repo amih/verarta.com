@@ -30,7 +30,7 @@
   "chains": {
     "verarta": {
       "name": "Verarta",
-      "chain_id": "REPLACE_WITH_CHAIN_ID_FROM_GENESIS",
+      "chain_id": "96f99757daf05efb9ed0f8bb675e643e4954a5b6c4c017a25a184ea27f0394cc",
       "http": "http://history:8888",
       "ship": [
         {
@@ -38,7 +38,7 @@
           "url": "ws://history:8080"
         }
       ],
-      "WS_ROUTER_HOST": "0.0.0.0",
+      "WS_ROUTER_HOST": "verarta-hyperion-indexer",
       "WS_ROUTER_PORT": 7001,
       "control_port": 7002
     }
