@@ -43,7 +43,8 @@ export const GET: APIRoute = async ({ params }) => {
     console.error('Get account error:', error);
 
     // Check if account doesn't exist
-    if (error instanceof Error && error.message.includes('unknown key')) {
+    const msg = error instanceof Error ? error.message : '';
+    if (msg.includes('unknown key') || msg.includes('account_query_exception')) {
       return new Response(JSON.stringify({
         error: 'Account not found',
       }), {

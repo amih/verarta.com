@@ -60,9 +60,12 @@ export async function encryptFile(
 
   console.log('[encrypt] box nonce length', boxNonce.length, 'expected', sodium.crypto_box_NONCEBYTES);
 
+  // One ephemeral keypair shared across all recipients so admin_encrypted_deks[i]
+  // can be decrypted using the same auth_tag stored on-chain.
+  const ephemeralKeyPair = sodium.crypto_box_keypair();
+
   const encryptedDeks = recipientPublicKeys.map((pubKeyB64, idx) => {
     const pubKeyBytes = sodium.from_base64(pubKeyB64, sodium.base64_variants.ORIGINAL);
-    const ephemeralKeyPair = sodium.crypto_box_keypair();
     console.log(`[encrypt] recipient[${idx}] pubKey=${pubKeyBytes.length}B`);
     let encryptedDek: Uint8Array;
     try {
@@ -81,14 +84,17 @@ export async function encryptFile(
     };
   });
 
-  // 5. Calculate SHA256 hash of plaintext
-  const hash = sodium.crypto_hash_sha256(new Uint8Array(fileBuffer));
+  // 5. Calculate SHA256 hash of plaintext (using Web Crypto API)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', fileBuffer);
+  const hashHex = Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 
   return {
     ciphertext,
     nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
     encryptedDeks,
-    hash: sodium.to_hex(hash),
+    hash: hashHex,
   };
 }
 
@@ -134,13 +140,78 @@ export async function decryptFile(
 }
 
 /**
+ * Decrypt only the DEK (Data Encryption Key) for a file.
+ * Extracts the DEK decryption logic from decryptFile into a standalone helper.
+ */
+export async function decryptDek(
+  encryptedDekB64: string,
+  ivB64: string,
+  ephemeralPublicKeyB64: string,
+  userPrivateKeyB64: string
+): Promise<Uint8Array> {
+  await ensureSodium();
+
+  const iv = sodium.from_base64(ivB64, sodium.base64_variants.ORIGINAL);
+  const encryptedDek = sodium.from_base64(encryptedDekB64, sodium.base64_variants.ORIGINAL);
+  const ephemeralPublicKey = sodium.from_base64(ephemeralPublicKeyB64, sodium.base64_variants.ORIGINAL);
+  const userPrivateKey = sodium.from_base64(userPrivateKeyB64, sodium.base64_variants.ORIGINAL);
+
+  // Pad 12-byte AEAD iv to 24-byte box nonce
+  const boxNonce = new Uint8Array(sodium.crypto_box_NONCEBYTES);
+  boxNonce.set(iv);
+
+  return sodium.crypto_box_open_easy(
+    encryptedDek,
+    boxNonce,
+    ephemeralPublicKey,
+    userPrivateKey
+  );
+}
+
+/**
+ * Re-encrypt a DEK for a new recipient's X25519 public key.
+ * Uses the same nonce convention as encryptFile (pad 12-byte iv to 24 bytes).
+ * Returns base64-encoded encryptedDek and ephemeralPublicKey (new auth_tag).
+ */
+export async function encryptDekForRecipient(
+  dek: Uint8Array,
+  ivB64: string,
+  recipientPublicKeyB64: string
+): Promise<{ encryptedDek: string; ephemeralPublicKey: string }> {
+  await ensureSodium();
+
+  const iv = sodium.from_base64(ivB64, sodium.base64_variants.ORIGINAL);
+  const recipientPublicKey = sodium.from_base64(recipientPublicKeyB64, sodium.base64_variants.ORIGINAL);
+
+  // Pad 12-byte AEAD iv to 24-byte box nonce (same convention as encryptFile)
+  const boxNonce = new Uint8Array(sodium.crypto_box_NONCEBYTES);
+  boxNonce.set(iv);
+
+  const ephemeralKeyPair = sodium.crypto_box_keypair();
+
+  const encryptedDekBytes = sodium.crypto_box_easy(
+    dek,
+    boxNonce,
+    recipientPublicKey,
+    ephemeralKeyPair.privateKey
+  );
+
+  return {
+    encryptedDek: sodium.to_base64(encryptedDekBytes, sodium.base64_variants.ORIGINAL),
+    ephemeralPublicKey: sodium.to_base64(ephemeralKeyPair.publicKey, sodium.base64_variants.ORIGINAL),
+  };
+}
+
+/**
  * Verify a file's SHA256 hash matches the expected hash.
  */
 export async function verifyFileHash(
   fileBuffer: ArrayBuffer,
   expectedHashHex: string
 ): Promise<boolean> {
-  await ensureSodium();
-  const hash = sodium.crypto_hash_sha256(new Uint8Array(fileBuffer));
-  return sodium.to_hex(hash) === expectedHashHex;
+  const hashBuffer = await crypto.subtle.digest('SHA-256', fileBuffer);
+  const hashHex = Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return hashHex === expectedHashHex;
 }

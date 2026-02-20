@@ -5,6 +5,7 @@ import { decryptFile, verifyFileHash } from '@/lib/crypto/encryption';
 import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
 import { fetchKeys } from '@/lib/api/auth';
 import { downloadFileRaw } from '@/lib/api/artworks';
+import { fetchAdminKeys } from '@/lib/api/admin';
 import { queryTable } from '@/lib/api/chain';
 import { useAuthStore } from '@/store/auth';
 import { Download, Eye, Loader2, AlertCircle } from 'lucide-react';
@@ -19,6 +20,7 @@ interface FileViewerProps {
 interface OnChainFileMetadata {
   file_id: number;
   encrypted_dek: string;
+  admin_encrypted_deks: string[];
   iv: string;
   auth_tag: string; // ephemeral public key
   file_hash: string;
@@ -78,14 +80,37 @@ export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileView
       // 3. Download encrypted file bytes from backend
       const encryptedBytes = await downloadFileRaw(fileId);
 
-      // 4. Decrypt the file
-      const decryptedBuffer = await decryptFile(
-        new Uint8Array(encryptedBytes),
-        meta.iv,               // nonce
-        meta.encrypted_dek,    // encrypted DEK
-        meta.auth_tag,         // ephemeral public key
-        keyPair.privateKey     // user's X25519 private key
-      );
+      // 4. Decrypt the file — try user key first, then admin key fallback
+      let decryptedBuffer: ArrayBuffer;
+      try {
+        decryptedBuffer = await decryptFile(
+          new Uint8Array(encryptedBytes),
+          meta.iv,
+          meta.encrypted_dek,
+          meta.auth_tag,
+          keyPair.privateKey
+        );
+      } catch (userDecryptErr) {
+        if (!user.is_admin) throw userDecryptErr;
+
+        // Admin fallback: find this admin's key in the registered admin keys list
+        const adminKeys = await fetchAdminKeys();
+        const myKeyIndex = adminKeys.findIndex((k) => k.public_key === keyPair.publicKey);
+        if (myKeyIndex === -1) {
+          throw new Error('Your key is not registered as an admin key. Go to Admin → register your key first.');
+        }
+        const adminEncryptedDek = meta.admin_encrypted_deks[myKeyIndex];
+        if (!adminEncryptedDek) {
+          throw new Error('No admin-encrypted DEK found for your key index. The file may have been uploaded before admin key escrow was configured.');
+        }
+        decryptedBuffer = await decryptFile(
+          new Uint8Array(encryptedBytes),
+          meta.iv,
+          adminEncryptedDek,
+          meta.auth_tag,
+          keyPair.privateKey
+        );
+      }
 
       // 5. Verify hash
       const hashHex = meta.file_hash;

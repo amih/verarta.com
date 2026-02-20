@@ -56,11 +56,12 @@ function CallbackHandler() {
         if (antelopePublicKey) {
           setStatus('Setting up blockchain account...');
           try {
-            await apiClient.post('/api/auth/create-blockchain-account', {
+            const res = await apiClient.post('/api/auth/create-blockchain-account', {
               antelope_public_key: antelopePublicKey,
             });
-          } catch {
-            // May already exist — not fatal
+            console.log('Blockchain account creation result:', res.data);
+          } catch (createErr) {
+            console.error('Blockchain account creation failed:', createErr);
           }
         }
 
