@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAuth } from '../../../../middleware/auth.js';
-import { query } from '../../../../lib/db.js';
+import { getActions } from '../../../../lib/hyperion.js';
 
 export const GET: APIRoute = async (context) => {
   const authResult = await requireAuth(context);
@@ -9,22 +9,36 @@ export const GET: APIRoute = async (context) => {
   const artworkId = Number(context.params.id);
 
   try {
-    const result = await query(
-      `SELECT event_type, from_account, to_account, tx_id, occurred_at
-       FROM artwork_events
-       WHERE blockchain_artwork_id = $1
-       ORDER BY occurred_at ASC`,
-      [artworkId]
-    );
+    const data = await getActions({
+      filter: 'verarta.core:createart,verarta.core:transferart',
+      limit: 1000,
+      sort: 'asc',
+    });
 
-    const events = result.rows.map((row: any) => ({
-      type: row.event_type as 'created' | 'transferred',
-      account: row.event_type === 'created' ? row.to_account : undefined,
-      from: row.event_type === 'transferred' ? row.from_account : undefined,
-      to: row.event_type === 'transferred' ? row.to_account : undefined,
-      timestamp: row.occurred_at,
-      tx_id: row.tx_id ?? undefined,
-    }));
+    const events = data.actions
+      .filter((a: any) => {
+        const d = a.act.data;
+        return String(d.artwork_id) === String(artworkId);
+      })
+      .map((a: any) => {
+        const name = a.act.name;
+        const d = a.act.data;
+        if (name === 'createart') {
+          return {
+            type: 'created' as const,
+            account: d.owner,
+            timestamp: a['@timestamp'],
+            tx_id: a.trx_id,
+          };
+        }
+        return {
+          type: 'transferred' as const,
+          from: d.from,
+          to: d.to,
+          timestamp: a['@timestamp'],
+          tx_id: a.trx_id,
+        };
+      });
 
     return new Response(JSON.stringify({ events }), {
       status: 200,

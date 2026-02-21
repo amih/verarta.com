@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '../../../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../../../middleware/auth.js';
 import { getTableRows, buildAndSignTransaction } from '../../../lib/antelope.js';
 
 export const GET: APIRoute = async (context) => {
-  const authResult = await requireAdmin(context);
+  // Any authenticated user can fetch admin public keys (needed for DEK encryption during upload)
+  const authResult = await requireAuth(context);
   if (authResult) return authResult;
 
   try {

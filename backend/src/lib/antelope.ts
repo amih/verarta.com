@@ -171,7 +171,10 @@ export async function createBlockchainAccount(
       owner: {
         threshold: 1,
         keys: [{ key: userAntelopePublicKey, weight: 1 }],
-        accounts: [],
+        accounts: [{
+          permission: { actor: contractAccount, permission: Name.from('active') },
+          weight: 1,
+        }],
         waits: [],
       },
       active: {
@@ -208,4 +211,106 @@ export async function createBlockchainAccount(
   await producerClient.v1.chain.push_transaction(
     PackedTransaction.fromSigned(signedTx)
   );
+}
+
+/**
+ * Add a new device key to an account's `active` permission.
+ * Signed by the service key (verarta.core), which must be on the account's `owner` permission.
+ * Returns true if the key was added, false if it was already present.
+ */
+export async function addDeviceKeyToAccount(
+  accountName: string,
+  newPublicKey: string
+): Promise<boolean> {
+  const account = await getAccount(accountName);
+  const activePerm = account.permissions.find(
+    (p: any) => String(p.perm_name) === 'active'
+  );
+  if (!activePerm) {
+    throw new Error(`Account ${accountName} has no active permission`);
+  }
+
+  // Check if key already present
+  const existingKeys = activePerm.required_auth.keys.map((k: any) => ({
+    key: String(k.key),
+    weight: Number(k.weight),
+  }));
+  const normalizedNew = String(newPublicKey);
+  if (existingKeys.some((k: any) => k.key === normalizedNew)) {
+    return false; // Already present
+  }
+
+  // Build new key list with the new key added, sorted ascending (required by Antelope)
+  const newKeys = [...existingKeys, { key: normalizedNew, weight: 1 }]
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  // Preserve existing accounts on active permission
+  const existingAccounts = activePerm.required_auth.accounts.map((a: any) => ({
+    permission: {
+      actor: Name.from(String(a.permission.actor)),
+      permission: Name.from(String(a.permission.permission)),
+    },
+    weight: Number(a.weight),
+  }));
+
+  const info = await chainClient.v1.chain.get_info();
+  const serviceKey = getServiceKey();
+  const systemAccount = CHAIN_CONFIG.systemAccount;
+
+  // Authorization: user@owner — satisfied by verarta.core's service key
+  // because verarta.core@active is on the user's owner permission
+  const auth = PermissionLevel.from({
+    actor: Name.from(accountName),
+    permission: 'owner',
+  });
+
+  const { abi: systemAbi } = await chainClient.v1.chain.get_abi(systemAccount);
+  if (!systemAbi) {
+    throw new Error('Failed to fetch system ABI');
+  }
+
+  const updateAuthAction = Action.from({
+    account: systemAccount,
+    name: Name.from('updateauth'),
+    authorization: [auth],
+    data: {
+      account: Name.from(accountName),
+      permission: Name.from('active'),
+      parent: Name.from('owner'),
+      auth: {
+        threshold: 1,
+        keys: newKeys,
+        accounts: existingAccounts,
+        waits: [],
+      },
+    },
+  }, systemAbi);
+
+  const expiration = TimePointSec.fromMilliseconds(
+    info.head_block_time.toMilliseconds() + 60000
+  );
+
+  const transaction = Transaction.from({
+    expiration,
+    ref_block_num: info.head_block_num.value & 0xffff,
+    ref_block_prefix: info.head_block_id.array.slice(8, 12).reduce(
+      (val: number, byte: number, i: number) => val | (byte << (i * 8)),
+      0
+    ) >>> 0,
+    actions: [updateAuthAction],
+  });
+
+  const chainId = Checksum256.from(info.chain_id);
+  const signature = serviceKey.signDigest(transaction.signingDigest(chainId));
+
+  const signedTx = SignedTransaction.from({
+    ...transaction,
+    signatures: [signature],
+  });
+
+  await producerClient.v1.chain.push_transaction(
+    PackedTransaction.fromSigned(signedTx)
+  );
+
+  return true;
 }

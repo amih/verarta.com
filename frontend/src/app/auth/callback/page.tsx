@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/auth';
 import { getSession, backupKeys, fetchKeys } from '@/lib/api/auth';
 import { apiClient } from '@/lib/api/client';
 import { generateKeyPair, getKeyPair, storeKeyPair, importEncryptedKeyData, getEncryptedKeyData } from '@/lib/crypto/keys';
-import { generateAntelopeKeyPair, getAntelopeKey, storeAntelopeKey, getEncryptedAntelopeKeyData, importEncryptedAntelopeKeyData } from '@/lib/crypto/antelope';
+import { generateAntelopeKeyPair, getAntelopeKey, storeAntelopeKey, addDeviceKey, migrateOwnerPermission, needsOwnerMigration } from '@/lib/crypto/antelope';
 
 function CallbackHandler() {
   const router = useRouter();
@@ -50,7 +50,7 @@ function CallbackHandler() {
 
         // Ensure encryption + signing keys exist
         setStatus('Setting up encryption keys...');
-        const antelopePublicKey = await ensureKeys(user.email);
+        const antelopePublicKey = await ensureKeys(user.email, !!user.blockchain_account, user.blockchain_account);
 
         // Always attempt blockchain account creation (idempotent — server handles "already exists")
         if (antelopePublicKey) {
@@ -114,7 +114,8 @@ export default function OAuthCallbackPage() {
 }
 
 // Returns the Antelope public key (always returned so account creation is retried each login)
-async function ensureKeys(email: string): Promise<string | null> {
+// hasBlockchainAccount: true if this is a returning user (account already exists on-chain)
+async function ensureKeys(email: string, hasBlockchainAccount: boolean, blockchainAccount?: string): Promise<string | null> {
   // 1. Ensure X25519 encryption keys
   let localKeys = await getKeyPair(email);
   if (!localKeys) {
@@ -140,43 +141,34 @@ async function ensureKeys(email: string): Promise<string | null> {
     // Non-fatal — keys still work locally
   }
 
-  // 2. Ensure Antelope signing keys
+  // 2. Ensure Antelope signing keys — each device has its own key pair
   let antelopeKey = await getAntelopeKey(email);
   if (!antelopeKey) {
-    // Try restoring from server first
-    const serverKeys = await fetchKeys();
-    if (serverKeys?.antelopeEncryptedPrivateKey && serverKeys?.antelopePublicKey && serverKeys?.antelopeKeyNonce) {
-      await importEncryptedAntelopeKeyData(email, {
-        antelopePublicKey: serverKeys.antelopePublicKey,
-        antelopeEncryptedPrivateKey: serverKeys.antelopeEncryptedPrivateKey,
-        antelopeKeyNonce: serverKeys.antelopeKeyNonce,
-      });
-      antelopeKey = await getAntelopeKey(email);
-    }
-    if (!antelopeKey) {
-      // Generate new as last resort
-      const { privateKey, publicKey } = generateAntelopeKeyPair();
-      await storeAntelopeKey(email, privateKey, publicKey);
-      antelopeKey = { privateKey, publicKey };
-    }
+    const { privateKey, publicKey } = generateAntelopeKeyPair();
+    await storeAntelopeKey(email, privateKey, publicKey);
+    antelopeKey = { privateKey, publicKey };
   }
 
-  // Backup Antelope keys to server if not already there
-  try {
-    const antelopeData = await getEncryptedAntelopeKeyData(email);
-    if (antelopeData) {
-      const currentServerKeys = await fetchKeys();
-      if (!currentServerKeys?.antelopeEncryptedPrivateKey) {
-        const encryptedData = await getEncryptedKeyData(email);
-        if (encryptedData) {
-          await backupKeys({ ...encryptedData, ...antelopeData });
-        }
+  // 3. For returning users, ensure owner migration then add device key
+  if (hasBlockchainAccount && blockchainAccount) {
+    try {
+      // Proactively migrate owner permission if needed (only succeeds on the device
+      // that has the original owner key — silently fails on other devices)
+      if (await needsOwnerMigration(blockchainAccount)) {
+        console.log('Migrating owner permission for', blockchainAccount);
+        await migrateOwnerPermission(blockchainAccount, antelopeKey.privateKey);
       }
+    } catch (err) {
+      // Expected to fail on devices that don't have the owner key
+      console.warn('Owner migration skipped (not the original device):', err);
     }
-  } catch {
-    // Non-fatal
+
+    try {
+      await addDeviceKey(antelopeKey.publicKey);
+    } catch (err) {
+      console.error('Failed to add device key:', err);
+    }
   }
 
-  // Always return the public key so blockchain account creation is retried
   return antelopeKey.publicKey;
 }

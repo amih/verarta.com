@@ -10,6 +10,7 @@ import {
   getArtworkExtras,
   saveArtworkExtras,
   getArtworkHistory,
+  deleteArtwork,
 } from '@/lib/api/artworks';
 import { fetchArtists, createArtist, type Artist } from '@/lib/api/artists';
 import { fetchCollections, createCollection, type Collection } from '@/lib/api/collections';
@@ -29,6 +30,7 @@ import {
   X,
   Clock,
   Upload,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -123,6 +125,10 @@ export default function ArtworkDetailPage() {
 
   // Transfer dialog
   const [showTransfer, setShowTransfer] = useState(false);
+
+  // Delete dialog
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Edit form state
   const [editMode, setEditMode] = useState(false);
@@ -231,6 +237,17 @@ export default function ArtworkDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!user) return;
+    setDeleting(true);
+    try {
+      await deleteArtwork(id, user.email);
+      router.push('/dashboard');
+    } catch {
+      setDeleting(false);
+    }
+  }
+
   const handleAddFile = useCallback((f: File) => {
     if (!ALLOWED_MIME_TYPES.includes(f.type as (typeof ALLOWED_MIME_TYPES)[number])) {
       setAddFileError(`Unsupported file type: ${f.type}`);
@@ -335,6 +352,13 @@ export default function ArtworkDetailPage() {
               >
                 <ArrowRightLeft className="h-4 w-4" />
                 Transfer
+              </button>
+              <button
+                onClick={() => setShowDelete(true)}
+                className="flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
               </button>
             </div>
           )}
@@ -704,6 +728,41 @@ export default function ArtworkDetailPage() {
             router.push('/dashboard');
           }}
         />
+      )}
+
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Delete artwork permanently?
+            </h2>
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+              This will permanently transfer <strong>{displayTitle}</strong> to a reserved account,
+              removing it from your collection. You will no longer be able to access or decrypt its files.
+            </p>
+            <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
+              This action cannot be undone. The blockchain will record the transfer as an immutable
+              audit trail. Administrators will retain access to the encrypted files.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowDelete(false)}
+                disabled={deleting}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

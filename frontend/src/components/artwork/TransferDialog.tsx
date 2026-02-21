@@ -5,7 +5,6 @@ import { Loader2, X } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { searchUsers } from '@/lib/api/users';
 import { transferArtwork } from '@/lib/api/artworks';
-import { apiClient } from '@/lib/api/client';
 import { queryTable } from '@/lib/api/chain';
 import { getKeyPair } from '@/lib/crypto/keys';
 import { getAntelopeKey } from '@/lib/crypto/antelope';
@@ -124,13 +123,6 @@ export function TransferDialog({ artworkId, artworkTitle, files, onClose, onSucc
         keyPair.privateKey,
         antelopeKey.privateKey
       );
-
-      // Record transfer event in Postgres for ownership history
-      await apiClient.post(`/api/artworks/${artworkId}/transfer-event`, {
-        from_account: user.blockchain_account,
-        to_account: selected.blockchain_account,
-        tx_id: transaction_id,
-      }).catch(() => { /* non-fatal */ });
 
       setStep('done');
     } catch (err) {

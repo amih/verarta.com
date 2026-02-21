@@ -8,7 +8,7 @@ import { loginSchema, type LoginInput } from '@/lib/utils/validation';
 import { login, fetchKeys } from '@/lib/api/auth';
 import { authenticateWebAuthn, isWebAuthnSupported } from '@/lib/crypto/webauthn';
 import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
-import { getAntelopeKey, importEncryptedAntelopeKeyData } from '@/lib/crypto/antelope';
+import { generateAntelopeKeyPair, getAntelopeKey, storeAntelopeKey, addDeviceKey, migrateOwnerPermission, needsOwnerMigration } from '@/lib/crypto/antelope';
 import { useAuthStore } from '@/store/auth';
 import { Loader2 } from 'lucide-react';
 
@@ -59,21 +59,34 @@ export function LoginForm() {
         console.warn('Failed to restore encryption keys:', e);
       }
 
-      // 3c. Restore Antelope signing keys if missing locally
+      // 3c. Ensure Antelope signing keys and add to on-chain account
       try {
-        const antelopeKey = await getAntelopeKey(data.email);
+        let antelopeKey = await getAntelopeKey(data.email);
         if (!antelopeKey) {
-          const serverKeys = await fetchKeys();
-          if (serverKeys?.antelopeEncryptedPrivateKey && serverKeys?.antelopePublicKey && serverKeys?.antelopeKeyNonce) {
-            await importEncryptedAntelopeKeyData(data.email, {
-              antelopePublicKey: serverKeys.antelopePublicKey,
-              antelopeEncryptedPrivateKey: serverKeys.antelopeEncryptedPrivateKey,
-              antelopeKeyNonce: serverKeys.antelopeKeyNonce,
-            });
+          const { privateKey, publicKey } = generateAntelopeKeyPair();
+          await storeAntelopeKey(data.email, privateKey, publicKey);
+          antelopeKey = { privateKey, publicKey };
+        }
+
+        // Ensure owner migration then add device key
+        if (result.user.blockchain_account) {
+          try {
+            if (await needsOwnerMigration(result.user.blockchain_account)) {
+              console.log('Migrating owner permission for', result.user.blockchain_account);
+              await migrateOwnerPermission(result.user.blockchain_account, antelopeKey.privateKey);
+            }
+          } catch (err) {
+            console.warn('Owner migration skipped (not the original device):', err);
+          }
+
+          try {
+            await addDeviceKey(antelopeKey.publicKey);
+          } catch (err) {
+            console.error('Failed to add device key:', err);
           }
         }
       } catch (e) {
-        console.warn('Failed to restore Antelope keys:', e);
+        console.warn('Failed to sync Antelope keys:', e);
       }
 
       // 4. Redirect to dashboard

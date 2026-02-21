@@ -291,9 +291,19 @@ export default function AdminPage() {
       for (const file of filesToRekey) {
         const myEncDek = file.admin_encrypted_deks[myKeyIndex];
         if (!myEncDek) continue; // shouldn't happen given filter logic
-        const dek = await decryptDek(myEncDek, file.iv, file.auth_tag, myPrivateKey);
-        const { encryptedDek } = await encryptDekForRecipient(dek, file.iv, targetKey.public_key);
-        batch.push({ file_id: file.file_id, new_encrypted_dek: encryptedDek });
+
+        // Handle embedded ephemeral key format: "encDek.ephPubKey"
+        let dekB64 = myEncDek;
+        let authTag = file.auth_tag;
+        if (myEncDek.includes('.')) {
+          const parts = myEncDek.split('.');
+          dekB64 = parts[0];
+          authTag = parts[1];
+        }
+
+        const dek = await decryptDek(dekB64, file.iv, authTag, myPrivateKey);
+        const { encryptedDek, ephemeralPublicKey } = await encryptDekForRecipient(dek, file.iv, targetKey.public_key);
+        batch.push({ file_id: file.file_id, new_encrypted_dek: `${encryptedDek}.${ephemeralPublicKey}` });
       }
 
       if (batch.length === 0) {

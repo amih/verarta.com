@@ -15,6 +15,8 @@ import type {
 import { decryptDek, encryptDekForRecipient } from '@/lib/crypto/encryption';
 import { signAndPushTransaction } from '@/lib/crypto/antelope';
 import { queryTable } from '@/lib/api/chain';
+import { getKeyPair } from '@/lib/crypto/keys';
+import { fetchAdminKeys } from '@/lib/api/admin';
 
 export async function uploadInit(data: UploadInitRequest): Promise<UploadInitResponse> {
   const res = await apiClient.post<UploadInitResponse>('/api/artworks/upload-init', data);
@@ -87,6 +89,73 @@ export async function saveArtworkExtras(
 export async function getArtworkHistory(id: number): Promise<{ events: HistoryEvent[] }> {
   const res = await apiClient.get<{ events: HistoryEvent[] }>(`/api/artworks/${id}/history`);
   return res.data;
+}
+
+/**
+ * Delete an artwork by transferring it on-chain to the 'deleted' account.
+ * Before calling the backend delete endpoint, escrows admin DEKs so admins
+ * retain file access after the transfer makes the user's DEKs undecryptable.
+ */
+export async function deleteArtwork(id: number, email: string): Promise<void> {
+  // 1. Get user's X25519 keys for DEK decryption
+  const keyPair = await getKeyPair(email);
+  if (!keyPair) {
+    throw new Error('Encryption keys not found in this browser. Please log in again.');
+  }
+
+  // 2. Fetch admin keys
+  const adminKeys = await fetchAdminKeys();
+
+  // 3. Fetch on-chain file records for this artwork
+  const filesResult = await queryTable<OnChainFile & { admin_encrypted_deks: string[] }>({
+    code: 'verarta.core',
+    scope: 'verarta.core',
+    table: 'artfiles',
+    index_position: 2,
+    key_type: 'i64',
+    lower_bound: String(id),
+    upper_bound: String(BigInt(id) + 1n),
+    limit: 100,
+  });
+
+  const artworkFiles = filesResult.rows.filter((r) => r.artwork_id === id);
+
+  // 4. For each file, escrow admin DEKs if not already complete
+  const escrowEntries: { file_id: number; new_encrypted_dek: string }[] = [];
+
+  for (const file of artworkFiles) {
+    const existingAdminDeks = file.admin_encrypted_deks?.length ?? 0;
+    if (existingAdminDeks >= adminKeys.length) continue;
+
+    // Decrypt user's DEK
+    const dek = await decryptDek(
+      file.encrypted_dek,
+      file.iv,
+      file.auth_tag,
+      keyPair.privateKey
+    );
+
+    // Re-encrypt for each missing admin key
+    for (let i = existingAdminDeks; i < adminKeys.length; i++) {
+      const { encryptedDek, ephemeralPublicKey } = await encryptDekForRecipient(
+        dek,
+        file.iv,
+        adminKeys[i].public_key
+      );
+      escrowEntries.push({
+        file_id: file.file_id,
+        new_encrypted_dek: `${encryptedDek}.${ephemeralPublicKey}`,
+      });
+    }
+  }
+
+  // 5. Push escrowed admin DEKs to chain
+  if (escrowEntries.length > 0) {
+    await apiClient.post('/api/artworks/escrow-admin-deks', { files: escrowEntries });
+  }
+
+  // 6. Call backend to transfer artwork to 'deleted' account
+  await apiClient.post(`/api/artworks/${id}/delete`, {});
 }
 
 export async function getArtwork(id: number): Promise<ArtworkDetailResponse> {

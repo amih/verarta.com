@@ -113,16 +113,6 @@ export const POST: APIRoute = async (context) => {
       [uploadId]
     );
 
-    // Record artwork creation event (only once — idempotent)
-    await query(
-      `INSERT INTO artwork_events (blockchain_artwork_id, event_type, to_account)
-       SELECT $1, 'created', $2
-       WHERE NOT EXISTS (
-         SELECT 1 FROM artwork_events WHERE blockchain_artwork_id=$1 AND event_type='created'
-       )`,
-      [artwork_id, ownerAccount]
-    );
-
     // Clean up temp file
     try {
       await deleteTempFile(tempFilePath);

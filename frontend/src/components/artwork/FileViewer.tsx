@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { decryptFile, verifyFileHash } from '@/lib/crypto/encryption';
+import { decryptFile, decryptDek, encryptDekForRecipient, verifyFileHash } from '@/lib/crypto/encryption';
 import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
 import { fetchKeys } from '@/lib/api/auth';
 import { downloadFileRaw } from '@/lib/api/artworks';
 import { fetchAdminKeys } from '@/lib/api/admin';
 import { queryTable } from '@/lib/api/chain';
+import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { Download, Eye, Loader2, AlertCircle } from 'lucide-react';
 
@@ -26,6 +27,54 @@ interface OnChainFileMetadata {
   file_hash: string;
   mime_type: string;
   filename_encrypted: string;
+  owner: string;
+}
+
+/**
+ * After owner successfully decrypts a file, escrow the DEK for any missing admin keys.
+ * Runs in the background — errors are silently ignored.
+ */
+async function escrowAdminDeks(
+  meta: OnChainFileMetadata,
+  ownerPrivateKey: string
+) {
+  try {
+    const adminKeys = await fetchAdminKeys();
+    if (adminKeys.length === 0) return;
+
+    // How many admin DEKs are already escrowed?
+    const existing = meta.admin_encrypted_deks.length;
+    if (existing >= adminKeys.length) return; // all done
+
+    // Decrypt the DEK using owner's key
+    const dek = await decryptDek(
+      meta.encrypted_dek,
+      meta.iv,
+      meta.auth_tag,
+      ownerPrivateKey
+    );
+
+    // Encrypt for each missing admin key
+    const batch: Array<{ file_id: number; new_encrypted_dek: string }> = [];
+    for (let i = existing; i < adminKeys.length; i++) {
+      const { encryptedDek, ephemeralPublicKey } = await encryptDekForRecipient(
+        dek,
+        meta.iv,
+        adminKeys[i].public_key
+      );
+      // Embed ephemeral public key in the stored string so it can be used for decryption
+      batch.push({
+        file_id: meta.file_id,
+        new_encrypted_dek: `${encryptedDek}.${ephemeralPublicKey}`,
+      });
+    }
+
+    if (batch.length > 0) {
+      await apiClient.post('/api/artworks/escrow-admin-deks', { files: batch });
+    }
+  } catch {
+    // Silently ignore — escrow is best-effort
+  }
 }
 
 export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileViewerProps) {
@@ -48,7 +97,6 @@ export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileView
 
     try {
       // 1. Fetch encryption metadata from on-chain artfiles table.
-      // upper_bound is exclusive — use limit 1 and verify the returned row matches.
       const tableResult = await queryTable<OnChainFileMetadata>({
         code: 'verarta.core',
         scope: 'verarta.core',
@@ -82,6 +130,7 @@ export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileView
 
       // 4. Decrypt the file — try user key first, then admin key fallback
       let decryptedBuffer: ArrayBuffer;
+      let ownerDecrypted = false;
       try {
         decryptedBuffer = await decryptFile(
           new Uint8Array(encryptedBytes),
@@ -90,6 +139,7 @@ export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileView
           meta.auth_tag,
           keyPair.privateKey
         );
+        ownerDecrypted = true;
       } catch (userDecryptErr) {
         if (!user.is_admin) throw userDecryptErr;
 
@@ -101,13 +151,27 @@ export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileView
         }
         const adminEncryptedDek = meta.admin_encrypted_deks[myKeyIndex];
         if (!adminEncryptedDek) {
-          throw new Error('No admin-encrypted DEK found for your key index. The file may have been uploaded before admin key escrow was configured.');
+          throw new Error(
+            'No admin-encrypted DEK found for your key index. ' +
+            'The file owner needs to open this file first to escrow admin keys, ' +
+            'or re-upload the file.'
+          );
         }
+
+        // Check if the stored DEK has an embedded ephemeral key (format: "encDek.ephPubKey")
+        let dekB64 = adminEncryptedDek;
+        let authTag = meta.auth_tag;
+        if (adminEncryptedDek.includes('.')) {
+          const parts = adminEncryptedDek.split('.');
+          dekB64 = parts[0];
+          authTag = parts[1];
+        }
+
         decryptedBuffer = await decryptFile(
           new Uint8Array(encryptedBytes),
           meta.iv,
-          adminEncryptedDek,
-          meta.auth_tag,
+          dekB64,
+          authTag,
           keyPair.privateKey
         );
       }
@@ -132,6 +196,11 @@ export function FileViewer({ fileId, filename, mimeType, autoDecrypt }: FileView
 
       setDecryptedUrl(url);
       setDecryptedBlob(blob);
+
+      // 7. If owner decrypted successfully, escrow admin DEKs in background
+      if (ownerDecrypted && meta.owner === user.blockchain_account) {
+        escrowAdminDeks(meta, keyPair.privateKey);
+      }
     } catch (err) {
       console.error('Decryption failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to decrypt file');
