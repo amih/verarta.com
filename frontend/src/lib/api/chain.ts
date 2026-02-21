@@ -111,3 +111,15 @@ export async function getTransaction(id: string): Promise<{ success: true; trans
   const res = await apiClient.get(`/api/chain/transaction/${id}`);
   return res.data;
 }
+
+export interface AccountInfo {
+  blockchain_account: string;
+  display_name: string;
+  email: string;
+  created_at: string;
+}
+
+export async function getAccounts(): Promise<{ success: true; accounts: AccountInfo[] }> {
+  const res = await apiClient.get('/api/chain/accounts');
+  return res.data;
+}

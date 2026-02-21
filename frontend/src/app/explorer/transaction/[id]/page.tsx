@@ -49,7 +49,6 @@ export default function TransactionDetailPage() {
 
   const actions: any[] = tx.actions || [];
   const blockNum = tx.actions?.[0]?.block_num || tx.block_num;
-  const timestamp = tx.actions?.[0]?.timestamp || tx.trx?.receipt?.trx?.[1]?.timestamp;
 
   return (
     <div className="space-y-6">
@@ -69,12 +68,6 @@ export default function TransactionDetailPage() {
                   {Number(blockNum).toLocaleString()}
                 </Link>
               </dd>
-            </div>
-          )}
-          {timestamp && (
-            <div className="flex px-4 py-3">
-              <dt className="w-32 shrink-0 text-sm font-medium text-zinc-500 dark:text-zinc-400">Timestamp</dt>
-              <dd className="text-sm text-zinc-900 dark:text-zinc-100">{timestamp}</dd>
             </div>
           )}
         </dl>

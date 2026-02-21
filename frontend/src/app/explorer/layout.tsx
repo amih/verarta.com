@@ -6,6 +6,7 @@ import { PublicHeader } from '@/components/layout/PublicHeader';
 
 const subNav = [
   { href: '/explorer', label: 'Overview' },
+  { href: '/explorer/accounts', label: 'Accounts' },
   { href: '/explorer/actions', label: 'Actions' },
   { href: '/explorer/tables', label: 'Tables' },
 ];

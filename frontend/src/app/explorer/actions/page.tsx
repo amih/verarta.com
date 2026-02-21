@@ -87,20 +87,19 @@ export default function ActionsSearchPage() {
               <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Action</th>
               <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Actor</th>
               <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Block</th>
-              <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Timestamp</th>
               <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Tx</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center">
+                <td colSpan={4} className="px-4 py-8 text-center">
                   <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-600 dark:border-t-zinc-100" />
                 </td>
               </tr>
             ) : actions.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-400">No actions found</td>
+                <td colSpan={4} className="px-4 py-8 text-center text-zinc-400">No actions found</td>
               </tr>
             ) : (
               actions.map((action, i) => (
@@ -117,11 +116,8 @@ export default function ActionsSearchPage() {
                   </td>
                   <td className="px-4 py-2">
                     <Link href={`/explorer/block/${action.block_num}`} className="text-blue-600 hover:underline dark:text-blue-400">
-                      {action.block_num}
+                      {action.block_num.toLocaleString()}
                     </Link>
-                  </td>
-                  <td className="px-4 py-2 text-zinc-500 dark:text-zinc-400">
-                    {action.timestamp || action['@timestamp'] || '—'}
                   </td>
                   <td className="px-4 py-2">
                     <Link href={`/explorer/transaction/${action.trx_id}`} className="font-mono text-xs text-blue-600 hover:underline dark:text-blue-400">
