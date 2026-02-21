@@ -115,7 +115,7 @@ export async function getTransaction(id: string): Promise<{ success: true; trans
 export interface AccountInfo {
   blockchain_account: string;
   display_name: string;
-  email: string;
+  email?: string;
   created_at: string;
 }
 

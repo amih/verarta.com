@@ -17,6 +17,8 @@ export default function AccountsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const showEmail = accounts.length > 0 && accounts[0].email !== undefined;
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -44,7 +46,9 @@ export default function AccountsPage() {
             <tr>
               <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Blockchain Account</th>
               <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Display Name</th>
-              <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Email</th>
+              {showEmail && (
+                <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Email</th>
+              )}
               <th className="px-4 py-2 text-left font-medium text-zinc-500 dark:text-zinc-400">Joined</th>
             </tr>
           </thead>
@@ -60,7 +64,9 @@ export default function AccountsPage() {
                   </Link>
                 </td>
                 <td className="px-4 py-2 text-zinc-900 dark:text-zinc-100">{account.display_name}</td>
-                <td className="px-4 py-2 text-zinc-500 dark:text-zinc-400">{account.email}</td>
+                {showEmail && (
+                  <td className="px-4 py-2 text-zinc-500 dark:text-zinc-400">{account.email}</td>
+                )}
                 <td className="px-4 py-2 text-zinc-500 dark:text-zinc-400">
                   {new Date(account.created_at).toLocaleDateString()}
                 </td>
