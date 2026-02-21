@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import { logout } from '@/lib/api/auth';
 import { Menu, X, LogOut, Home, Info, FileText, LayoutDashboard, Upload, ShieldCheck, Download, Search } from 'lucide-react';
@@ -13,6 +14,7 @@ export function PublicHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, logout: logoutStore } = useAuthStore();
+  const queryClient = useQueryClient();
   const [navOpen, setNavOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
@@ -40,6 +42,7 @@ export function PublicHeader() {
     try {
       await logout();
     } catch {}
+    queryClient.clear();
     logoutStore();
     router.push('/auth/login');
   }

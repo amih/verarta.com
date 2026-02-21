@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import { logout } from '@/lib/api/auth';
 import { getAccount, queryTable } from '@/lib/api/chain';
@@ -49,6 +49,7 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout: logoutStore } = useAuthStore();
+  const queryClient = useQueryClient();
   const [navOpen, setNavOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
@@ -103,6 +104,7 @@ export function Header() {
     } catch {
       // still clear local state
     }
+    queryClient.clear();
     logoutStore();
     router.push('/auth/login');
   }
