@@ -242,6 +242,16 @@ export default function ArtworkDetailPage() {
     setDeleting(true);
     try {
       await deleteArtwork(id, user.email);
+      // Optimistically remove from all cached artwork lists — the blockchain
+      // takes a moment to finalize, so a refetch would still return this item.
+      queryClient.setQueriesData(
+        { queryKey: ['artworks'] },
+        (old: any) => {
+          if (!old?.artworks) return old;
+          const artworks = old.artworks.filter((a: any) => String(a.id) !== String(id));
+          return { ...old, artworks, count: artworks.length };
+        }
+      );
       router.push('/dashboard');
     } catch {
       setDeleting(false);
@@ -704,9 +714,14 @@ export default function ArtworkDetailPage() {
                 <div>
                   <p className="text-sm text-zinc-700 dark:text-zinc-300">
                     {event.type === 'created'
-                      ? `Created by ${event.account}`
-                      : `${event.from} → ${event.to}`}
+                      ? `Created by ${event.account_name ?? event.account}`
+                      : `${event.from_name ?? event.from} → ${event.to_name ?? event.to}`}
                   </p>
+                  {event.message && (
+                    <p className="mt-0.5 text-xs italic text-zinc-500 dark:text-zinc-400">
+                      "{event.message}"
+                    </p>
+                  )}
                   <p className="text-xs text-zinc-500">
                     {new Date(event.timestamp).toLocaleString()}
                   </p>

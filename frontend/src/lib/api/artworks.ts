@@ -68,10 +68,14 @@ export interface ArtworkExtras {
 export interface HistoryEvent {
   type: 'created' | 'transferred';
   account?: string;
+  account_name?: string | null;
   from?: string;
+  from_name?: string | null;
   to?: string;
+  to_name?: string | null;
   timestamp: string;
   tx_id?: string;
+  message?: string;
 }
 
 export async function getArtworkExtras(id: number): Promise<ArtworkExtras | null> {
@@ -206,7 +210,8 @@ export async function transferArtwork(
   toAccount: string,
   recipientX25519PublicKey: string,
   userX25519PrivateKey: string,
-  antelopePrivateKeyWif: string
+  antelopePrivateKeyWif: string,
+  memo: string = ''
 ): Promise<{ transaction_id: string }> {
   const uploadedFiles = files.filter((f) => f.upload_complete);
 
@@ -261,6 +266,7 @@ export async function transferArtwork(
       file_ids,
       new_encrypted_deks,
       new_auth_tags,
+      memo,
     },
     fromAccount,
     antelopePrivateKeyWif

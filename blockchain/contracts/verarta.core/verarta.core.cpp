@@ -405,7 +405,8 @@ void verartatoken::transferart(
    name to,
    std::vector<uint64_t> file_ids,
    std::vector<std::string> new_encrypted_deks,
-   std::vector<std::string> new_auth_tags
+   std::vector<std::string> new_auth_tags,
+   std::string memo
 ) {
    require_auth(from);
 

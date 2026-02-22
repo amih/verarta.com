@@ -67,11 +67,11 @@ export const POST: APIRoute = async (context) => {
     const new_auth_tags = artworkFiles.map(() => '');
 
     // Transfer artwork to 'deleted' account on-chain
-    // Authorization: user@active — satisfied by the service key because
-    // verarta.core@active is on every user's owner permission
+    // Authorization: user@owner — verarta.core@active is on every user's owner
+    // permission (not active), so we must declare owner here.
     const authorization = PermissionLevel.from({
       actor: Name.from(user.blockchainAccount),
-      permission: 'active',
+      permission: 'owner',
     });
 
     await buildAndSignTransaction(
@@ -83,6 +83,7 @@ export const POST: APIRoute = async (context) => {
         file_ids,
         new_encrypted_deks,
         new_auth_tags,
+        memo: '',
       },
       authorization
     );

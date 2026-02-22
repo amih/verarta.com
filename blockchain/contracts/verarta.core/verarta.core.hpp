@@ -195,6 +195,7 @@ public:
     * @param file_ids - IDs of files to update (all upload_complete files)
     * @param new_encrypted_deks - DEKs re-encrypted for the recipient's X25519 key
     * @param new_auth_tags - New ephemeral public keys (auth_tag) for each file
+    * @param memo - Optional message from sender to recipient (recorded on-chain)
     */
    [[eosio::action]]
    void transferart(
@@ -203,7 +204,8 @@ public:
       name to,
       std::vector<uint64_t> file_ids,
       std::vector<std::string> new_encrypted_deks,
-      std::vector<std::string> new_auth_tags
+      std::vector<std::string> new_auth_tags,
+      std::string memo
    );
 
    // ========== TABLES ==========

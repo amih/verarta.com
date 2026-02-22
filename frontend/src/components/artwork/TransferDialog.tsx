@@ -33,6 +33,7 @@ export function TransferDialog({ artworkId, artworkTitle, files, onClose, onSucc
   const [results, setResults] = useState<UserResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<UserResult | null>(null);
+  const [message, setMessage] = useState('');
   const [progressMsg, setProgressMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -112,16 +113,17 @@ export function TransferDialog({ artworkId, artworkTitle, files, onClose, onSucc
         return;
       }
 
-      // Step 3: Sign and push the transfer transaction
+      // Step 3: Sign and push the transfer transaction (memo recorded on-chain)
       setProgressMsg('Signing transaction…');
-      const { transaction_id } = await transferArtwork(
+      await transferArtwork(
         artworkId,
         files,
         user.blockchain_account,
         selected.blockchain_account,
         recipientPublicKey,
         keyPair.privateKey,
-        antelopeKey.privateKey
+        antelopeKey.privateKey,
+        message.trim()
       );
 
       setStep('done');
@@ -202,6 +204,14 @@ export function TransferDialog({ artworkId, artworkTitle, files, onClose, onSucc
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 This will permanently transfer ownership. Your copy of the decryption keys will no longer work after the transfer.
               </p>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Add a message to the recipient… (optional)"
+                maxLength={500}
+                rows={3}
+                className="w-full resize-none rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
               <div className="flex gap-3">
                 <button
                   onClick={handleTransfer}
