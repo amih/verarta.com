@@ -24,11 +24,16 @@ export const GET: APIRoute = async (context) => {
       .map((a: any) => {
         const name = a.act.name;
         const d = a.act.data;
+        // Hyperion timestamps are UTC but lack the 'Z' suffix — normalise so
+        // JavaScript's Date constructor doesn't misinterpret them as local time.
+        const ts: string = a['@timestamp'];
+        const timestamp = ts.endsWith('Z') ? ts : ts + 'Z';
+
         if (name === 'createart') {
           return {
             type: 'created' as const,
             account: d.owner,
-            timestamp: a['@timestamp'],
+            timestamp,
             tx_id: a.trx_id,
           };
         }
@@ -37,7 +42,7 @@ export const GET: APIRoute = async (context) => {
           from: d.from,
           to: d.to,
           message: d.memo || undefined,
-          timestamp: a['@timestamp'],
+          timestamp,
           tx_id: a.trx_id,
         };
       });

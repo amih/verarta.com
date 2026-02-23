@@ -124,6 +124,27 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxIndex, files.length]);
 
+  // Touch swipe for lightbox
+  const touchStartX = useRef<number | null>(null);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(delta) < 50) return; // ignore short swipes
+    if (delta < 0) {
+      // swipe left → next
+      setLightboxIndex((i) => (i !== null && i < files.length - 1 ? i + 1 : i));
+    } else {
+      // swipe right → prev
+      setLightboxIndex((i) => (i !== null && i > 0 ? i - 1 : i));
+    }
+  }
+
   // Drag-and-drop handlers
   function handleDragStart(fileId: number) {
     dragId.current = fileId;
@@ -223,6 +244,8 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
           onClick={() => setLightboxIndex(null)}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
           {/* Close */}
           <button
