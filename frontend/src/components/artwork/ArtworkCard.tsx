@@ -39,7 +39,8 @@ export function ArtworkCard({ artwork, files }: ArtworkCardProps) {
               key={f.id}
               fileId={f.id}
               mimeType={f.mime_type}
-              containerClassName="h-12 flex-1 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800"
+              containerClassName="h-12 w-16 shrink-0 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800"
+              objectFit="contain"
             />
           ))}
         </div>

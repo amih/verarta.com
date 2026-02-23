@@ -23,11 +23,13 @@ interface ArtworkThumbnailProps {
   fileId: string;
   mimeType: string;
   containerClassName?: string;
+  objectFit?: 'cover' | 'contain';
 }
 
-export function ArtworkThumbnail({ fileId, mimeType, containerClassName }: ArtworkThumbnailProps) {
+export function ArtworkThumbnail({ fileId, mimeType, containerClassName, objectFit = 'cover' }: ArtworkThumbnailProps) {
   const defaultClass = 'mb-3 h-32 overflow-hidden rounded-md bg-zinc-100 dark:bg-zinc-800';
   const cn = containerClassName ?? defaultClass;
+  const imgClass = objectFit === 'contain' ? 'h-full w-full object-contain' : 'h-full w-full object-cover';
   const user = useAuthStore((s) => s.user);
   const [loading, setLoading] = useState(true);
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
@@ -114,7 +116,7 @@ export function ArtworkThumbnail({ fileId, mimeType, containerClassName }: Artwo
         <img
           src={decryptedUrl}
           alt=""
-          className="h-full w-full object-cover"
+          className={imgClass}
         />
       </div>
     );
