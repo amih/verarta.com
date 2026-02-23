@@ -216,10 +216,13 @@ export async function transferArtwork(
 ): Promise<{ transaction_id: string }> {
   const uploadedFiles = files.filter((f) => f.upload_complete);
 
+  // Fetch admin keys upfront so we can escrow while we have each DEK decrypted
+  const adminKeys = await fetchAdminKeys();
+
   const results = await Promise.all(
     uploadedFiles.map(async (file) => {
-      // Fetch on-chain file record to get iv, encrypted_dek, auth_tag
-      const tableResult = await queryTable<OnChainFile>({
+      // Fetch on-chain file record to get iv, encrypted_dek, auth_tag, admin_encrypted_deks
+      const tableResult = await queryTable<OnChainFile & { admin_encrypted_deks: string[] }>({
         code: 'verarta.core',
         scope: 'verarta.core',
         table: 'artfiles',
@@ -242,6 +245,21 @@ export async function transferArtwork(
         userX25519PrivateKey
       );
 
+      // Escrow for any admin keys not yet covered — do this while we have the raw DEK
+      const existingAdminDeks = onChain.admin_encrypted_deks?.length ?? 0;
+      const escrowEntries: Array<{ file_id: number; new_encrypted_dek: string }> = [];
+      for (let i = existingAdminDeks; i < adminKeys.length; i++) {
+        const { encryptedDek, ephemeralPublicKey } = await encryptDekForRecipient(
+          dek,
+          onChain.iv,
+          adminKeys[i].public_key
+        );
+        escrowEntries.push({
+          file_id: file.id,
+          new_encrypted_dek: `${encryptedDek}.${ephemeralPublicKey}`,
+        });
+      }
+
       // Re-encrypt the DEK for the recipient
       const { encryptedDek: newEncryptedDek, ephemeralPublicKey: newAuthTag } =
         await encryptDekForRecipient(dek, onChain.iv, recipientX25519PublicKey);
@@ -250,9 +268,16 @@ export async function transferArtwork(
         file_id: file.id,
         new_encrypted_dek: newEncryptedDek,
         new_auth_tag: newAuthTag,
+        escrowEntries,
       };
     })
   );
+
+  // Push admin escrow entries before the transfer so admins retain access
+  const allEscrowEntries = results.flatMap((r) => r.escrowEntries);
+  if (allEscrowEntries.length > 0) {
+    await apiClient.post('/api/artworks/escrow-admin-deks', { files: allEscrowEntries });
+  }
 
   const file_ids = results.map((r) => r.file_id);
   const new_encrypted_deks = results.map((r) => r.new_encrypted_dek);
