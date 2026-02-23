@@ -19,6 +19,7 @@ import { fetchCollections, createCollection, type Collection } from '@/lib/api/c
 import { fetchAdminKeys } from '@/lib/api/admin';
 import { addFileToArtwork } from '@/lib/upload/orchestrator';
 import { FileViewer } from '@/components/artwork/FileViewer';
+import { ImageGrid } from '@/components/artwork/ImageGrid';
 import { TransferDialog } from '@/components/artwork/TransferDialog';
 import { useAuthStore } from '@/store/auth';
 import { ALLOWED_MIME_TYPES } from '@/types/artwork';
@@ -456,7 +457,7 @@ export default function ArtworkDetailPage() {
             </p>
           </div>
           {isOwner && (
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
               <button
                 onClick={editMode ? () => setEditMode(false) : enterEditMode}
                 className="flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -635,34 +636,20 @@ export default function ArtworkDetailPage() {
         </div>
       )}
 
-      {/* Image previews */}
+      {/* Image grid */}
       {(() => {
         const imageFiles = displayedFiles.filter(
           (f) => f.mime_type?.startsWith('image/') && f.upload_complete && !f.is_thumbnail
         );
         if (imageFiles.length === 0) return null;
-        const [mainImage, ...additionalImages] = imageFiles;
         return (
           <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-            <FileViewer
-              fileId={mainImage.id}
-              filename={mainImage.filename}
-              mimeType={mainImage.mime_type}
-              autoDecrypt
+            <ImageGrid
+              files={imageFiles}
+              editMode={editMode && isOwner}
+              fileOrder={editMode ? editFileOrder : (extras?.file_order ?? displayedFiles.map((f) => f.id))}
+              onReorder={setEditFileOrder}
             />
-            {additionalImages.length > 0 && (
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                {additionalImages.map((img) => (
-                  <FileViewer
-                    key={img.id}
-                    fileId={img.id}
-                    filename={img.filename}
-                    mimeType={img.mime_type}
-                    autoDecrypt
-                  />
-                ))}
-              </div>
-            )}
           </div>
         );
       })()}
