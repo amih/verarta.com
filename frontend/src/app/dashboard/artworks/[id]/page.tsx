@@ -155,6 +155,7 @@ export default function ArtworkDetailPage() {
 
   // File delete state
   const [deletingFileId, setDeletingFileId] = useState<number | null>(null);
+  const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<number | null>(null);
 
   // Add file state
   const [addFileMode, setAddFileMode] = useState(false);
@@ -248,11 +249,10 @@ export default function ArtworkDetailPage() {
   }
 
   async function handleDeleteFile(fileId: number) {
-    if (!confirm('Delete this file permanently? This cannot be undone.')) return;
+    setConfirmDeleteFileId(null);
     setDeletingFileId(fileId);
     try {
       await deleteArtworkFile(id, fileId);
-      // Remove from file order too
       setEditFileOrder((prev) => prev.filter((fid) => fid !== fileId));
       await queryClient.invalidateQueries({ queryKey: ['artwork', id] });
     } catch (err) {
@@ -707,19 +707,47 @@ export default function ArtworkDetailPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {editMode && isOwner && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile(file.id)}
-                      disabled={deletingFileId === file.id}
-                      title="Delete file"
-                      className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                    >
-                      {deletingFileId === file.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteFileId(confirmDeleteFileId === file.id ? null : file.id)}
+                        disabled={deletingFileId === file.id}
+                        title="Delete file"
+                        className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                      >
+                        {deletingFileId === file.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                      {confirmDeleteFileId === file.id && (
+                        <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                          <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            Delete this file permanently?
+                          </p>
+                          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                            This cannot be undone.
+                          </p>
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFile(file.id)}
+                              className="flex-1 rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteFileId(null)}
+                              className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   )}
                   {file.upload_complete && (
                     <FileViewer
