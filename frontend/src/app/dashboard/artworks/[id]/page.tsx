@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import type { DragEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -11,6 +12,7 @@ import {
   saveArtworkExtras,
   getArtworkHistory,
   deleteArtwork,
+  deleteArtworkFile,
 } from '@/lib/api/artworks';
 import { fetchArtists, createArtist, type Artist } from '@/lib/api/artists';
 import { fetchCollections, createCollection, type Collection } from '@/lib/api/collections';
@@ -22,9 +24,8 @@ import { useAuthStore } from '@/store/auth';
 import { ALLOWED_MIME_TYPES } from '@/types/artwork';
 import {
   ArrowRightLeft,
-  ChevronDown,
-  ChevronUp,
   FileIcon,
+  GripVertical,
   Loader2,
   Pencil,
   Plus,
@@ -147,6 +148,14 @@ export default function ArtworkDetailPage() {
   // File order state (edit mode)
   const [editFileOrder, setEditFileOrder] = useState<number[]>([]);
 
+  // Drag-and-drop state
+  const dragFileId = useRef<number | null>(null);
+  const dragOverFileId = useRef<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+
+  // File delete state
+  const [deletingFileId, setDeletingFileId] = useState<number | null>(null);
+
   // Add file state
   const [addFileMode, setAddFileMode] = useState(false);
   const [addFileFile, setAddFileFile] = useState<File | null>(null);
@@ -197,14 +206,60 @@ export default function ArtworkDetailPage() {
     });
   }, [data?.artwork?.files, extras?.file_order, editMode, editFileOrder]);
 
-  function moveFile(index: number, direction: -1 | 1) {
+  function handleDragStart(fileId: number) {
+    dragFileId.current = fileId;
+  }
+
+  function handleDragOver(e: DragEvent, fileId: number) {
+    e.preventDefault();
+    if (dragFileId.current === fileId) return;
+    dragOverFileId.current = fileId;
+    setDragOverId(fileId);
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    const from = dragFileId.current;
+    const to = dragOverFileId.current;
+    if (from === null || to === null || from === to) {
+      dragFileId.current = null;
+      dragOverFileId.current = null;
+      setDragOverId(null);
+      return;
+    }
     setEditFileOrder((prev) => {
       const next = [...prev];
-      const swap = index + direction;
-      if (swap < 0 || swap >= next.length) return prev;
-      [next[index], next[swap]] = [next[swap], next[index]];
+      const fromIdx = next.indexOf(from);
+      const toIdx = next.indexOf(to);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, from);
       return next;
     });
+    dragFileId.current = null;
+    dragOverFileId.current = null;
+    setDragOverId(null);
+  }
+
+  function handleDragEnd() {
+    dragFileId.current = null;
+    dragOverFileId.current = null;
+    setDragOverId(null);
+  }
+
+  async function handleDeleteFile(fileId: number) {
+    if (!confirm('Delete this file permanently? This cannot be undone.')) return;
+    setDeletingFileId(fileId);
+    try {
+      await deleteArtworkFile(id, fileId);
+      // Remove from file order too
+      setEditFileOrder((prev) => prev.filter((fid) => fid !== fileId));
+      await queryClient.invalidateQueries({ queryKey: ['artwork', id] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete file');
+    } finally {
+      setDeletingFileId(null);
+    }
   }
 
   function enterEditMode() {
@@ -616,34 +671,26 @@ export default function ArtworkDetailPage() {
         <h2 className="mb-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">Files</h2>
 
         {displayedFiles.filter((f) => !f.is_thumbnail).length > 0 && (
-          <div className="space-y-3 mb-4">
-            {displayedFiles.filter((f) => !f.is_thumbnail).map((file, idx) => (
+          <div className="space-y-2 mb-4">
+            {displayedFiles.filter((f) => !f.is_thumbnail).map((file) => (
               <div
                 key={file.id}
-                className="flex items-center justify-between rounded-lg border border-zinc-100 p-3 dark:border-zinc-800"
+                draggable={editMode && isOwner}
+                onDragStart={() => handleDragStart(file.id)}
+                onDragOver={(e) => editMode && isOwner && handleDragOver(e, file.id)}
+                onDrop={(e) => editMode && isOwner && handleDrop(e)}
+                onDragEnd={handleDragEnd}
+                className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+                  dragOverId === file.id
+                    ? 'border-zinc-400 bg-zinc-50 dark:border-zinc-500 dark:bg-zinc-800/70'
+                    : 'border-zinc-100 dark:border-zinc-800'
+                } ${editMode && isOwner ? 'cursor-grab active:cursor-grabbing' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   {editMode && isOwner && (
-                    <div className="flex flex-col">
-                      <button
-                        type="button"
-                        onClick={() => moveFile(idx, -1)}
-                        disabled={idx === 0}
-                        className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 disabled:opacity-20 dark:hover:text-zinc-200"
-                      >
-                        <ChevronUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveFile(idx, 1)}
-                        disabled={idx === displayedFiles.length - 1}
-                        className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 disabled:opacity-20 dark:hover:text-zinc-200"
-                      >
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    <GripVertical className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
                   )}
-                  <FileIcon className="h-5 w-5 text-zinc-400" />
+                  <FileIcon className="h-5 w-5 shrink-0 text-zinc-400" />
                   <div>
                     <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                       {file.filename}
@@ -658,13 +705,30 @@ export default function ArtworkDetailPage() {
                     </p>
                   </div>
                 </div>
-                {file.upload_complete && (
-                  <FileViewer
-                    fileId={file.id}
-                    filename={file.filename}
-                    mimeType={file.mime_type}
-                  />
-                )}
+                <div className="flex items-center gap-2">
+                  {editMode && isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile(file.id)}
+                      disabled={deletingFileId === file.id}
+                      title="Delete file"
+                      className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                    >
+                      {deletingFileId === file.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                  {file.upload_complete && (
+                    <FileViewer
+                      fileId={file.id}
+                      filename={file.filename}
+                      mimeType={file.mime_type}
+                    />
+                  )}
+                </div>
               </div>
             ))}
           </div>

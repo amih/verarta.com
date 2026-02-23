@@ -22,9 +22,12 @@ interface OnChainFileMetadata {
 interface ArtworkThumbnailProps {
   fileId: string;
   mimeType: string;
+  containerClassName?: string;
 }
 
-export function ArtworkThumbnail({ fileId, mimeType }: ArtworkThumbnailProps) {
+export function ArtworkThumbnail({ fileId, mimeType, containerClassName }: ArtworkThumbnailProps) {
+  const defaultClass = 'mb-3 h-32 overflow-hidden rounded-md bg-zinc-100 dark:bg-zinc-800';
+  const cn = containerClassName ?? defaultClass;
   const user = useAuthStore((s) => s.user);
   const [loading, setLoading] = useState(true);
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
@@ -99,7 +102,7 @@ export function ArtworkThumbnail({ fileId, mimeType }: ArtworkThumbnailProps) {
 
   if (loading) {
     return (
-      <div className="mb-3 flex h-32 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800">
+      <div className={`flex items-center justify-center ${cn}`}>
         <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
       </div>
     );
@@ -107,7 +110,7 @@ export function ArtworkThumbnail({ fileId, mimeType }: ArtworkThumbnailProps) {
 
   if (decryptedUrl) {
     return (
-      <div className="mb-3 h-32 overflow-hidden rounded-md bg-zinc-100 dark:bg-zinc-800">
+      <div className={cn}>
         <img
           src={decryptedUrl}
           alt=""
@@ -118,7 +121,7 @@ export function ArtworkThumbnail({ fileId, mimeType }: ArtworkThumbnailProps) {
   }
 
   return (
-    <div className="mb-3 flex h-32 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800">
+    <div className={`flex items-center justify-center ${cn}`}>
       <FileIcon className="h-10 w-10 text-zinc-400" />
     </div>
   );

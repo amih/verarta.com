@@ -162,6 +162,19 @@ public:
    );
 
    /**
+    * Delete a single file and its chunks from an artwork
+    * @param file_id - File ID to delete
+    * @param artwork_id - Parent artwork ID
+    * @param owner - Owner account (must match)
+    */
+   [[eosio::action]]
+   void deletefile(
+      uint64_t file_id,
+      uint64_t artwork_id,
+      name owner
+   );
+
+   /**
     * Delete artwork and all associated files
     * @param artwork_id - Artwork ID to delete
     * @param owner - Owner account (must match)

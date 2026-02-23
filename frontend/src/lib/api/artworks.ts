@@ -163,6 +163,10 @@ export async function deleteArtwork(id: number, email: string): Promise<void> {
   await apiClient.post(`/api/artworks/${id}/delete`, {});
 }
 
+export async function deleteArtworkFile(artworkId: number, fileId: number): Promise<void> {
+  await apiClient.post(`/api/artworks/${artworkId}/files/${fileId}/delete`, {});
+}
+
 export async function getArtwork(id: number): Promise<ArtworkDetailResponse> {
   const res = await apiClient.get<ArtworkDetailResponse>(`/api/artworks/${id}`);
   return res.data;

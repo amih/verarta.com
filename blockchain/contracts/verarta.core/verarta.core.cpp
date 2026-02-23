@@ -361,6 +361,45 @@ void verartatoken::logaccess(
    });
 }
 
+void verartatoken::deletefile(
+   uint64_t file_id,
+   uint64_t artwork_id,
+   name owner
+) {
+   require_auth(get_self()); // service key only
+
+   check(file_id > 0, "file_id must be positive");
+   check(artwork_id > 0, "artwork_id must be positive");
+
+   artworks_table artworks(get_self(), get_self().value);
+   artfiles_table artfiles(get_self(), get_self().value);
+   artchunks_table artchunks(get_self(), get_self().value);
+
+   auto artwork_itr = artworks.find(artwork_id);
+   check(artwork_itr != artworks.end(), "artwork not found");
+   check(artwork_itr->owner == owner, "artwork owner mismatch");
+
+   auto file_itr = artfiles.find(file_id);
+   check(file_itr != artfiles.end(), "file not found");
+   check(file_itr->artwork_id == artwork_id, "file does not belong to artwork");
+   check(file_itr->owner == owner, "file owner mismatch");
+
+   // Delete all chunks for this file
+   auto by_file = artchunks.get_index<"byfile"_n>();
+   auto chunk_itr = by_file.lower_bound(file_id);
+   while (chunk_itr != by_file.end() && chunk_itr->file_id == file_id) {
+      chunk_itr = by_file.erase(chunk_itr);
+   }
+
+   // Decrement artwork file count
+   artworks.modify(artwork_itr, same_payer, [&](auto& row) {
+      if (row.file_count > 0) row.file_count--;
+   });
+
+   // Delete the file record
+   artfiles.erase(file_itr);
+}
+
 void verartatoken::deleteart(
    uint64_t artwork_id,
    name owner
@@ -616,4 +655,4 @@ uint64_t verartatoken::calculate_next_monday(uint64_t from_time) {
 } // namespace verarta
 
 // Dispatch actions
-EOSIO_DISPATCH(verarta::verartatoken, (createart)(updateart)(addfile)(uploadchunk)(completefile)(setquota)(addadminkey)(rmadminkey)(addadmindek)(logaccess)(deleteart)(transferart))
+EOSIO_DISPATCH(verarta::verartatoken, (createart)(updateart)(addfile)(uploadchunk)(completefile)(setquota)(addadminkey)(rmadminkey)(addadmindek)(logaccess)(deleteart)(deletefile)(transferart))

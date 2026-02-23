@@ -141,7 +141,7 @@ export function ArtworkGrid() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {data.artworks.map((artwork) => (
-            <ArtworkCard key={artwork.id} artwork={artwork} file={artwork.file} />
+            <ArtworkCard key={artwork.id} artwork={artwork} files={artwork.files} />
           ))}
         </div>
       )}

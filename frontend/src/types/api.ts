@@ -194,7 +194,7 @@ export interface ArtworkListResponse {
     owner: string;
     title: string;
     created_at: string;
-    file?: { id: string; mime_type: string } | null;
+    files?: Array<{ id: string; mime_type: string }> | null;
     artist_name?: string | null;
     collection_name?: string | null;
     era?: string | null;

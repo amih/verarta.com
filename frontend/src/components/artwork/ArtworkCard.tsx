@@ -12,20 +12,36 @@ interface ArtworkCardProps {
     era?: string | null;
     creation_date?: string | null;
   };
-  file?: { id: string; mime_type: string } | null;
+  files?: Array<{ id: string; mime_type: string }> | null;
 }
 
-export function ArtworkCard({ artwork, file }: ArtworkCardProps) {
+export function ArtworkCard({ artwork, files }: ArtworkCardProps) {
+  const imageFiles = (files ?? []).filter((f) => f.mime_type.startsWith('image/'));
+  const mainFile = imageFiles[0] ?? null;
+  const additionalFiles = imageFiles.slice(1, 4);
+
   return (
     <Link
       href={`/dashboard/artworks/${artwork.id}`}
       className="group block rounded-lg border border-zinc-200 p-4 transition-colors hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
     >
-      {file && file.mime_type.startsWith('image/') ? (
-        <ArtworkThumbnail fileId={file.id} mimeType={file.mime_type} />
+      {mainFile ? (
+        <ArtworkThumbnail fileId={mainFile.id} mimeType={mainFile.mime_type} />
       ) : (
         <div className="mb-3 flex h-32 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800">
           <FileIcon className="h-10 w-10 text-zinc-400" />
+        </div>
+      )}
+      {additionalFiles.length > 0 && (
+        <div className="mb-3 -mt-2 flex gap-1">
+          {additionalFiles.map((f) => (
+            <ArtworkThumbnail
+              key={f.id}
+              fileId={f.id}
+              mimeType={f.mime_type}
+              containerClassName="h-12 flex-1 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800"
+            />
+          ))}
         </div>
       )}
       <h3 className="truncate text-sm font-medium text-zinc-900 group-hover:text-zinc-700 dark:text-zinc-100 dark:group-hover:text-zinc-300">

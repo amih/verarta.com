@@ -87,8 +87,8 @@ export const GET: APIRoute = async (context) => {
 
     const artworks = await Promise.all(
       rows.map(async (row: any) => {
-        // Fetch the first file for this artwork via secondary index (artwork_id)
-        let file: { id: string; mime_type: string } | null = null;
+        // Fetch files for this artwork via secondary index (artwork_id)
+        let files: Array<{ id: string; mime_type: string }> = [];
         try {
           const fileResult = await getTableRows({
             code: 'verarta.core',
@@ -98,15 +98,15 @@ export const GET: APIRoute = async (context) => {
             key_type: 'i64',
             lower_bound: row.artwork_id.toString(),
             upper_bound: (BigInt(row.artwork_id) + 1n).toString(),
-            limit: 10,
+            limit: 20,
           });
-          if (fileResult.rows.length > 0) {
-            // Prefer thumbnail, fall back to first file
-            const thumb = (fileResult.rows as any[]).find((f) => f.is_thumbnail && f.upload_complete);
-            const first = fileResult.rows[0] as any;
-            const chosen = thumb ?? first;
-            file = { id: String(chosen.file_id), mime_type: chosen.mime_type };
-          }
+          const rows = (fileResult.rows as any[]).filter((f) => f.upload_complete);
+          // Thumbnail files first (they're the compact preview), then other image files
+          const thumbs = rows.filter((f) => f.is_thumbnail);
+          const images = rows.filter((f) => !f.is_thumbnail && f.mime_type?.startsWith('image/'));
+          const others = rows.filter((f) => !f.is_thumbnail && !f.mime_type?.startsWith('image/'));
+          const ordered = [...thumbs, ...images, ...others];
+          files = ordered.slice(0, 5).map((f) => ({ id: String(f.file_id), mime_type: f.mime_type }));
         } catch {
           // silently ignore — file info is best-effort
         }
@@ -118,7 +118,7 @@ export const GET: APIRoute = async (context) => {
           owner: row.owner,
           title: row._title,
           created_at: new Date(row.created_at * 1000).toISOString(),
-          file,
+          files,
           artist_name: extras?.artist_name ?? null,
           collection_name: extras?.collection_name ?? null,
           era: extras?.era ?? null,
