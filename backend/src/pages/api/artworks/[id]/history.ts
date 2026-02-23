@@ -36,7 +36,7 @@ export const GET: APIRoute = async (context) => {
           type: 'transferred' as const,
           from: d.from,
           to: d.to,
-          memo: d.memo || undefined,
+          message: d.memo || undefined,
           timestamp: a['@timestamp'],
           tx_id: a.trx_id,
         };
