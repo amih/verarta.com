@@ -13,7 +13,7 @@ export const GET: APIRoute = async (context) => {
   try {
     const result = await query(
       `SELECT ae.title, ae.description_html, ae.creation_date, ae.era, ae.artist_id, ae.collection_id,
-              a.name AS artist_name, c.name AS collection_name
+              ae.file_order, a.name AS artist_name, c.name AS collection_name
        FROM artwork_extras ae
        LEFT JOIN artists a ON ae.artist_id = a.id
        LEFT JOIN collections c ON ae.collection_id = c.id
@@ -43,11 +43,11 @@ export const PUT: APIRoute = async (context) => {
 
   try {
     const body = await context.request.json();
-    const { title, description_html, creation_date, era, artist_id, collection_id } = body;
+    const { title, description_html, creation_date, era, artist_id, collection_id, file_order } = body;
 
     await query(
-      `INSERT INTO artwork_extras(blockchain_artwork_id, user_id, title, description_html, creation_date, era, artist_id, collection_id, updated_at)
-       VALUES($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      `INSERT INTO artwork_extras(blockchain_artwork_id, user_id, title, description_html, creation_date, era, artist_id, collection_id, file_order, updated_at)
+       VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
        ON CONFLICT (blockchain_artwork_id, user_id)
        DO UPDATE SET
          title = EXCLUDED.title,
@@ -56,8 +56,9 @@ export const PUT: APIRoute = async (context) => {
          era = EXCLUDED.era,
          artist_id = EXCLUDED.artist_id,
          collection_id = EXCLUDED.collection_id,
+         file_order = EXCLUDED.file_order,
          updated_at = NOW()`,
-      [artworkId, user.id, title || null, description_html || null, creation_date || null, era || null, artist_id || null, collection_id || null]
+      [artworkId, user.id, title || null, description_html || null, creation_date || null, era || null, artist_id || null, collection_id || null, file_order ? JSON.stringify(file_order) : null]
     );
 
     // Mirror to on-chain fields — description and metadata as base64-encoded plaintext.

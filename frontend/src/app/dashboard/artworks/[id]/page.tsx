@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -22,6 +22,8 @@ import { useAuthStore } from '@/store/auth';
 import { ALLOWED_MIME_TYPES } from '@/types/artwork';
 import {
   ArrowRightLeft,
+  ChevronDown,
+  ChevronUp,
   FileIcon,
   Loader2,
   Pencil,
@@ -142,6 +144,9 @@ export default function ArtworkDetailPage() {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
 
+  // File order state (edit mode)
+  const [editFileOrder, setEditFileOrder] = useState<number[]>([]);
+
   // Add file state
   const [addFileMode, setAddFileMode] = useState(false);
   const [addFileFile, setAddFileFile] = useState<File | null>(null);
@@ -178,6 +183,30 @@ export default function ArtworkDetailPage() {
     retry: false,
   });
 
+  const displayedFiles = useMemo(() => {
+    const files = data?.artwork?.files ?? [];
+    const order = editMode ? editFileOrder : (extras?.file_order ?? []);
+    if (!order.length) return files;
+    return [...files].sort((a, b) => {
+      const ai = order.indexOf(a.id);
+      const bi = order.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }, [data?.artwork?.files, extras?.file_order, editMode, editFileOrder]);
+
+  function moveFile(index: number, direction: -1 | 1) {
+    setEditFileOrder((prev) => {
+      const next = [...prev];
+      const swap = index + direction;
+      if (swap < 0 || swap >= next.length) return prev;
+      [next[index], next[swap]] = [next[swap], next[index]];
+      return next;
+    });
+  }
+
   function enterEditMode() {
     if (!data) return;
     const artwork = data.artwork;
@@ -195,6 +224,11 @@ export default function ArtworkDetailPage() {
         : { id: null, name: '' }
     );
     editor?.commands.setContent(extras?.description_html || '');
+    setEditFileOrder(
+      extras?.file_order?.length
+        ? extras.file_order
+        : artwork.files.map((f) => f.id)
+    );
     setEditError('');
     if (artists.length === 0) fetchArtists().then(setArtists).catch(() => {});
     if (collections.length === 0) fetchCollections().then(setCollections).catch(() => {});
@@ -226,6 +260,7 @@ export default function ArtworkDetailPage() {
         era: editEra || null,
         artist_id: artistId ?? null,
         collection_id: collectionId ?? null,
+        file_order: editFileOrder.length ? editFileOrder : null,
       });
 
       await queryClient.invalidateQueries({ queryKey: ['artwork-extras', id] });
@@ -549,14 +584,34 @@ export default function ArtworkDetailPage() {
       <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">Files</h2>
 
-        {artwork.files.length > 0 && (
+        {displayedFiles.length > 0 && (
           <div className="space-y-3 mb-4">
-            {artwork.files.map((file) => (
+            {displayedFiles.map((file, idx) => (
               <div
                 key={file.id}
                 className="flex items-center justify-between rounded-lg border border-zinc-100 p-3 dark:border-zinc-800"
               >
                 <div className="flex items-center gap-3">
+                  {editMode && isOwner && (
+                    <div className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={() => moveFile(idx, -1)}
+                        disabled={idx === 0}
+                        className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 disabled:opacity-20 dark:hover:text-zinc-200"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveFile(idx, 1)}
+                        disabled={idx === displayedFiles.length - 1}
+                        className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 disabled:opacity-20 dark:hover:text-zinc-200"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                   <FileIcon className="h-5 w-5 text-zinc-400" />
                   <div>
                     <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -713,9 +768,27 @@ export default function ArtworkDetailPage() {
                 <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600" />
                 <div>
                   <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                    {event.type === 'created'
-                      ? `Created by ${event.account_name ?? event.account}`
-                      : `${event.from_name ?? event.from} → ${event.to_name ?? event.to}`}
+                    {event.type === 'created' ? (
+                      <>
+                        Created by{' '}
+                        <span className="font-medium">{event.account_name ?? event.account}</span>
+                        {event.account_name && (
+                          <span className="ml-1 text-zinc-400 dark:text-zinc-500">({event.account})</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium">{event.from_name ?? event.from}</span>
+                        {event.from_name && (
+                          <span className="ml-1 text-zinc-400 dark:text-zinc-500">({event.from})</span>
+                        )}
+                        {' → '}
+                        <span className="font-medium">{event.to_name ?? event.to}</span>
+                        {event.to_name && (
+                          <span className="ml-1 text-zinc-400 dark:text-zinc-500">({event.to})</span>
+                        )}
+                      </>
+                    )}
                   </p>
                   {event.message && (
                     <p className="mt-0.5 text-xs italic text-zinc-500 dark:text-zinc-400">

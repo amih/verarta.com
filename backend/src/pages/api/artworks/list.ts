@@ -98,11 +98,14 @@ export const GET: APIRoute = async (context) => {
             key_type: 'i64',
             lower_bound: row.artwork_id.toString(),
             upper_bound: (BigInt(row.artwork_id) + 1n).toString(),
-            limit: 1,
+            limit: 10,
           });
           if (fileResult.rows.length > 0) {
-            const f = fileResult.rows[0] as any;
-            file = { id: String(f.file_id), mime_type: f.mime_type };
+            // Prefer thumbnail, fall back to first file
+            const thumb = (fileResult.rows as any[]).find((f) => f.is_thumbnail && f.upload_complete);
+            const first = fileResult.rows[0] as any;
+            const chosen = thumb ?? first;
+            file = { id: String(chosen.file_id), mime_type: chosen.mime_type };
           }
         } catch {
           // silently ignore — file info is best-effort

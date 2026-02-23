@@ -63,6 +63,7 @@ export interface ArtworkExtras {
   collection_id: number | null;
   artist_name: string | null;
   collection_name: string | null;
+  file_order: number[] | null;
 }
 
 export interface HistoryEvent {

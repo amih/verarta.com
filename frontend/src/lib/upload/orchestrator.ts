@@ -5,6 +5,7 @@ import { fetchKeys } from '@/lib/api/auth';
 import { uploadStart } from '@/lib/api/artworks';
 import { uint8ToBase64 } from '@/lib/utils/chunking';
 import { useUploadStore } from '@/store/upload';
+import { generateThumbnail } from './thumbnail';
 
 export interface AddFileOptions {
   artworkId: number;
@@ -149,6 +150,41 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
 
     store.completeUpload(tempId);
 
+    // Generate and upload thumbnail for PDF/text files (best-effort, non-blocking)
+    generateThumbnail(opts.file).then(async (thumb) => {
+      if (!thumb) return;
+      const thumbId = fileId + 1;
+      const thumbBuffer = await thumb.arrayBuffer();
+      const thumbEncrypted = await encryptFile(thumbBuffer, recipientKeys);
+      await signAndPushTransaction(
+        'addfile',
+        {
+          file_id: thumbId,
+          artwork_id: artworkId,
+          owner: opts.blockchainAccount,
+          filename_encrypted: btoa(thumb.name),
+          mime_type: 'image/png',
+          file_size: thumbEncrypted.ciphertext.length,
+          file_hash: thumbEncrypted.hash,
+          encrypted_dek: thumbEncrypted.encryptedDeks[0].encryptedDek,
+          admin_encrypted_deks: thumbEncrypted.encryptedDeks.slice(1).map((d) => d.encryptedDek),
+          iv: thumbEncrypted.nonce,
+          auth_tag: thumbEncrypted.encryptedDeks[0].ephemeralPublicKey,
+          is_thumbnail: true,
+        },
+        opts.blockchainAccount,
+        antelopeKey.privateKey
+      );
+      await uploadStart({
+        artwork_id: artworkId,
+        file_id: thumbId,
+        title: '',
+        filename: thumb.name,
+        mime_type: 'image/png',
+        file_data: uint8ToBase64(thumbEncrypted.ciphertext),
+      });
+    }).catch(() => { /* thumbnail failure is non-fatal */ });
+
     return {
       artworkId,
       fileId,
@@ -234,6 +270,42 @@ export async function addFileToArtwork(opts: AddFileOptions): Promise<{ fileId: 
     });
 
     store.completeUpload(tempId);
+
+    // Generate and upload thumbnail for PDF/text files (best-effort, non-blocking)
+    generateThumbnail(opts.file).then(async (thumb) => {
+      if (!thumb) return;
+      const thumbId = fileId + 1;
+      const recipientKeys = [keyPair!.publicKey, ...(opts.adminPublicKeys || [])];
+      const thumbBuffer = await thumb.arrayBuffer();
+      const thumbEncrypted = await encryptFile(thumbBuffer, recipientKeys);
+      await signAndPushTransaction(
+        'addfile',
+        {
+          file_id: thumbId,
+          artwork_id: opts.artworkId,
+          owner: opts.blockchainAccount,
+          filename_encrypted: btoa(thumb.name),
+          mime_type: 'image/png',
+          file_size: thumbEncrypted.ciphertext.length,
+          file_hash: thumbEncrypted.hash,
+          encrypted_dek: thumbEncrypted.encryptedDeks[0].encryptedDek,
+          admin_encrypted_deks: thumbEncrypted.encryptedDeks.slice(1).map((d) => d.encryptedDek),
+          iv: thumbEncrypted.nonce,
+          auth_tag: thumbEncrypted.encryptedDeks[0].ephemeralPublicKey,
+          is_thumbnail: true,
+        },
+        opts.blockchainAccount,
+        antelopeKey.privateKey
+      );
+      await uploadStart({
+        artwork_id: opts.artworkId,
+        file_id: thumbId,
+        title: '',
+        filename: thumb.name,
+        mime_type: 'image/png',
+        file_data: uint8ToBase64(thumbEncrypted.ciphertext),
+      });
+    }).catch(() => { /* thumbnail failure is non-fatal */ });
 
     return { fileId };
   } catch (err) {
