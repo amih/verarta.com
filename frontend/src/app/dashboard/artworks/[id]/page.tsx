@@ -193,6 +193,17 @@ export default function ArtworkDetailPage() {
     retry: false,
   });
 
+  // Derive owner display name from history events — must be before early returns
+  const ownerDisplayName = useMemo(() => {
+    if (!historyData?.events.length || !data?.artwork) return null;
+    const owner = data.artwork.owner;
+    for (const e of [...historyData.events].reverse()) {
+      if (e.type === 'transferred' && e.to === owner) return e.to_name ?? null;
+      if (e.type === 'created' && e.account === owner) return e.account_name ?? null;
+    }
+    return null;
+  }, [historyData, data?.artwork?.owner]);
+
   const displayedFiles = useMemo(() => {
     const files = data?.artwork?.files ?? [];
     const order = editMode ? editFileOrder : (extras?.file_order ?? []);
@@ -421,16 +432,6 @@ export default function ArtworkDetailPage() {
   const { artwork } = data;
   const isOwner = user?.blockchain_account === artwork.owner;
   const displayTitle = extras?.title || artwork.title;
-
-  // Derive owner display name from history events
-  const ownerDisplayName = useMemo(() => {
-    if (!historyData?.events.length) return null;
-    for (const e of [...historyData.events].reverse()) {
-      if (e.type === 'transferred' && e.to === artwork.owner) return e.to_name ?? null;
-      if (e.type === 'created' && e.account === artwork.owner) return e.account_name ?? null;
-    }
-    return null;
-  }, [historyData, artwork.owner]);
 
   return (
     <div className="space-y-6">
