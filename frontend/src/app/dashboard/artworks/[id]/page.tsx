@@ -37,6 +37,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { ImageEditorModal } from '@/components/artwork/ImageEditorModal';
 
 function Combobox({
   label,
@@ -161,6 +162,7 @@ export default function ArtworkDetailPage() {
   // Add file state
   const [addFileMode, setAddFileMode] = useState(false);
   const [addFileFile, setAddFileFile] = useState<File | null>(null);
+  const [pendingAddFile, setPendingAddFile] = useState<File | null>(null);
   const [addFileDragOver, setAddFileDragOver] = useState(false);
   const [addFileError, setAddFileError] = useState('');
   const [addFileUploading, setAddFileUploading] = useState(false);
@@ -370,7 +372,11 @@ export default function ArtworkDetailPage() {
       return;
     }
     setAddFileError('');
-    setAddFileFile(f);
+    if (f.type.startsWith('image/')) {
+      setPendingAddFile(f);
+    } else {
+      setAddFileFile(f);
+    }
   }, []);
 
   async function submitAddFile() {
@@ -380,7 +386,7 @@ export default function ArtworkDetailPage() {
     try {
       const adminKeys = await fetchAdminKeys();
       const adminPublicKeys = adminKeys.map((k) => k.public_key);
-      const currentFileCount = data?.artwork.files.length ?? 0;
+      const currentFileIds = new Set((data?.artwork.files ?? []).map((f) => f.id));
 
       await addFileToArtwork({
         artworkId: id,
@@ -391,12 +397,26 @@ export default function ArtworkDetailPage() {
       });
 
       // Poll until the history node has indexed the new file (producer→history lag)
+      let newFileId: number | null = null;
       for (let i = 0; i < 10; i++) {
         await new Promise(r => setTimeout(r, 800));
         try {
           const updated = await getArtwork(id);
-          if (updated.artwork.files.length > currentFileCount) break;
+          const newFile = updated.artwork.files.find((f) => !currentFileIds.has(f.id));
+          if (newFile) {
+            newFileId = newFile.id;
+            break;
+          }
         } catch { /* keep polling */ }
+      }
+
+      // Append new file at the end of file_order so the first file stays as main
+      if (newFileId !== null) {
+        const currentOrder = extras?.file_order?.length
+          ? extras.file_order
+          : (data?.artwork.files ?? []).map((f) => f.id);
+        await saveArtworkExtras(id, { file_order: [...currentOrder, newFileId] });
+        await queryClient.invalidateQueries({ queryKey: ['artwork-extras', id] });
       }
 
       await queryClient.invalidateQueries({ queryKey: ['artwork', id] });
@@ -435,6 +455,14 @@ export default function ArtworkDetailPage() {
   const displayTitle = extras?.title || artwork.title;
 
   return (
+    <>
+    {pendingAddFile && (
+      <ImageEditorModal
+        file={pendingAddFile}
+        onApply={(edited) => { setAddFileFile(edited); setPendingAddFile(null); }}
+        onCancel={() => setPendingAddFile(null)}
+      />
+    )}
     <div className="space-y-6">
       <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400">
         &larr; Back to dashboard
@@ -636,16 +664,16 @@ export default function ArtworkDetailPage() {
         </div>
       )}
 
-      {/* Image grid */}
+      {/* File grid (images, PDFs, text) */}
       {(() => {
-        const imageFiles = displayedFiles.filter(
-          (f) => f.mime_type?.startsWith('image/') && f.upload_complete && !f.is_thumbnail
+        const viewableFiles = displayedFiles.filter(
+          (f) => f.upload_complete && !f.is_thumbnail
         );
-        if (imageFiles.length === 0) return null;
+        if (viewableFiles.length === 0) return null;
         return (
           <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <ImageGrid
-              files={imageFiles}
+              files={viewableFiles}
               editMode={editMode && isOwner}
               fileOrder={editMode ? editFileOrder : (extras?.file_order ?? displayedFiles.map((f) => f.id))}
               onReorder={setEditFileOrder}
@@ -964,5 +992,6 @@ export default function ArtworkDetailPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

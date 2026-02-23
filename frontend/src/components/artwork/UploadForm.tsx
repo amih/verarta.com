@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/auth';
 import { useUploadStore } from '@/store/upload';
 import { ALLOWED_MIME_TYPES } from '@/types/artwork';
 import { Upload, X, FileIcon, FileText, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ImageEditorModal } from '@/components/artwork/ImageEditorModal';
 import { fetchAdminKeys } from '@/lib/api/admin';
 import { saveArtworkExtras } from '@/lib/api/artworks';
 import { fetchArtists, createArtist, type Artist } from '@/lib/api/artists';
@@ -93,6 +94,7 @@ export function UploadForm() {
   const user = useAuthStore((s) => s.user);
   const uploads = useUploadStore((s) => s.uploads);
   const [file, setFile] = useState<File | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -157,7 +159,11 @@ export function UploadForm() {
       return;
     }
     setError('');
-    setFile(f);
+    if (f.type.startsWith('image/')) {
+      setPendingFile(f);
+    } else {
+      setFile(f);
+    }
   }, []);
 
   function onDrop(e: React.DragEvent) {
@@ -236,6 +242,14 @@ export function UploadForm() {
     : 0;
 
   return (
+    <>
+    {pendingFile && (
+      <ImageEditorModal
+        file={pendingFile}
+        onApply={(edited) => { setFile(edited); setPendingFile(null); }}
+        onCancel={() => setPendingFile(null)}
+      />
+    )}
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Title */}
       <div>
@@ -461,5 +475,6 @@ export function UploadForm() {
         )}
       </button>
     </form>
+    </>
   );
 }
