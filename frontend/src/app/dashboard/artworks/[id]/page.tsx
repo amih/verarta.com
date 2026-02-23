@@ -367,6 +367,16 @@ export default function ArtworkDetailPage() {
   const isOwner = user?.blockchain_account === artwork.owner;
   const displayTitle = extras?.title || artwork.title;
 
+  // Derive owner display name from history events
+  const ownerDisplayName = useMemo(() => {
+    if (!historyData?.events.length) return null;
+    for (const e of [...historyData.events].reverse()) {
+      if (e.type === 'transferred' && e.to === artwork.owner) return e.to_name ?? null;
+      if (e.type === 'created' && e.account === artwork.owner) return e.account_name ?? null;
+    }
+    return null;
+  }, [historyData, artwork.owner]);
+
   return (
     <div className="space-y-6">
       <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400">
@@ -379,7 +389,14 @@ export default function ArtworkDetailPage() {
           <div>
             <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">{displayTitle}</h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Owner: {artwork.owner} &middot; Created: {new Date(artwork.created_at).toLocaleString()}
+              Owner:{' '}
+              <span className="text-zinc-700 dark:text-zinc-300">
+                {ownerDisplayName ?? artwork.owner}
+              </span>
+              {ownerDisplayName && (
+                <span className="ml-1 text-zinc-400 dark:text-zinc-500">({artwork.owner})</span>
+              )}
+              {' '}&middot;{' '}Created: {new Date(artwork.created_at).toLocaleString()}
             </p>
           </div>
           {isOwner && (
@@ -562,20 +579,34 @@ export default function ArtworkDetailPage() {
         </div>
       )}
 
-      {/* Image preview */}
+      {/* Image previews */}
       {(() => {
-        const imageFile = artwork.files.find(
-          (f) => f.mime_type?.startsWith('image/') && f.upload_complete
+        const imageFiles = displayedFiles.filter(
+          (f) => f.mime_type?.startsWith('image/') && f.upload_complete && !f.is_thumbnail
         );
-        if (!imageFile) return null;
+        if (imageFiles.length === 0) return null;
+        const [mainImage, ...additionalImages] = imageFiles;
         return (
           <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <FileViewer
-              fileId={imageFile.id}
-              filename={imageFile.filename}
-              mimeType={imageFile.mime_type}
+              fileId={mainImage.id}
+              filename={mainImage.filename}
+              mimeType={mainImage.mime_type}
               autoDecrypt
             />
+            {additionalImages.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                {additionalImages.map((img) => (
+                  <FileViewer
+                    key={img.id}
+                    fileId={img.id}
+                    filename={img.filename}
+                    mimeType={img.mime_type}
+                    autoDecrypt
+                  />
+                ))}
+              </div>
+            )}
           </div>
         );
       })()}
@@ -584,9 +615,9 @@ export default function ArtworkDetailPage() {
       <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">Files</h2>
 
-        {displayedFiles.length > 0 && (
+        {displayedFiles.filter((f) => !f.is_thumbnail).length > 0 && (
           <div className="space-y-3 mb-4">
-            {displayedFiles.map((file, idx) => (
+            {displayedFiles.filter((f) => !f.is_thumbnail).map((file, idx) => (
               <div
                 key={file.id}
                 className="flex items-center justify-between rounded-lg border border-zinc-100 p-3 dark:border-zinc-800"

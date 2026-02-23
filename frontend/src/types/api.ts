@@ -214,6 +214,7 @@ export interface ArtworkFile {
   total_chunks: number;
   upload_complete: boolean;
   owner: string;
+  is_thumbnail?: boolean;
 }
 
 export interface ArtworkDetailResponse {

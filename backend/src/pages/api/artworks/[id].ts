@@ -25,6 +25,7 @@ function mapFile(row: any) {
     total_chunks: row.total_chunks,
     upload_complete: row.upload_complete,
     owner: row.owner,
+    is_thumbnail: row.is_thumbnail ?? false,
   };
 }
 
