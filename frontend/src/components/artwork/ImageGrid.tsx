@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { DragEvent } from 'react';
-import { ChevronLeft, ChevronRight, GripVertical, Loader2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileIcon, FileText, GripVertical, Loader2, X } from 'lucide-react';
 import { decryptFile } from '@/lib/crypto/encryption';
 import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
 import { fetchKeys } from '@/lib/api/auth';
@@ -31,22 +31,18 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
   const user = useAuthStore((s) => s.user);
   const [urls, setUrls] = useState<Map<number, string>>(new Map());
   const [loadingIds, setLoadingIds] = useState<Set<number>>(new Set());
+  const [textContents, setTextContents] = useState<Map<number, string>>(new Map());
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // Drag state
   const dragId = useRef<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
 
-  // Decrypt all images on mount / when files change
+  // Decrypt all files on mount / when files change
   useEffect(() => {
     if (!user) return;
 
     files.forEach(async (file) => {
-      setUrls((prev) => {
-        if (prev.has(file.id)) return prev; // already decrypted
-        return prev;
-      });
-
       setLoadingIds((prev) => {
         if (prev.has(file.id)) return prev;
         const next = new Set(prev);
@@ -89,6 +85,17 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
         const blob = new Blob([decryptedBuffer], { type: file.mime_type });
         const objectUrl = URL.createObjectURL(blob);
         setUrls((prev) => new Map(prev).set(file.id, objectUrl));
+
+        // Decode text content for text/JSON files
+        if (file.mime_type === 'text/plain' || file.mime_type === 'application/json') {
+          try {
+            let text = await blob.text();
+            if (file.mime_type === 'application/json') {
+              try { text = JSON.stringify(JSON.parse(text), null, 2); } catch { /* keep raw */ }
+            }
+            setTextContents((prev) => new Map(prev).set(file.id, text));
+          } catch { /* silent */ }
+        }
       } catch {
         // silent fail — cell stays as loading placeholder
       } finally {
@@ -135,12 +142,10 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
     if (touchStartX.current === null) return;
     const delta = e.changedTouches[0].clientX - touchStartX.current;
     touchStartX.current = null;
-    if (Math.abs(delta) < 50) return; // ignore short swipes
+    if (Math.abs(delta) < 50) return;
     if (delta < 0) {
-      // swipe left → next
       setLightboxIndex((i) => (i !== null && i < files.length - 1 ? i + 1 : i));
     } else {
-      // swipe right → prev
       setLightboxIndex((i) => (i !== null && i > 0 ? i - 1 : i));
     }
   }
@@ -165,20 +170,20 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
       return;
     }
 
-    // Rebuild the full file order, moving the dragged image to the target's position
-    const imageIds = files.map((f) => f.id);
-    const newImageIds = [...imageIds];
-    const fromIdx = newImageIds.indexOf(fromId);
-    const toIdx = newImageIds.indexOf(targetId);
-    newImageIds.splice(fromIdx, 1);
-    newImageIds.splice(toIdx, 0, fromId);
+    // Rebuild the full file order, moving the dragged file to the target's position
+    const fileIds = files.map((f) => f.id);
+    const newFileIds = [...fileIds];
+    const fromIdx = newFileIds.indexOf(fromId);
+    const toIdx = newFileIds.indexOf(targetId);
+    newFileIds.splice(fromIdx, 1);
+    newFileIds.splice(toIdx, 0, fromId);
 
-    // Slot the new image order back into the full file order
-    const imageSet = new Set(imageIds);
+    // Slot the new order back into the full file order
+    const fileSet = new Set(fileIds);
     const positions: number[] = [];
-    fileOrder.forEach((id, i) => { if (imageSet.has(id)) positions.push(i); });
+    fileOrder.forEach((id, i) => { if (fileSet.has(id)) positions.push(i); });
     const newFullOrder = [...fileOrder];
-    positions.forEach((pos, i) => { newFullOrder[pos] = newImageIds[i]; });
+    positions.forEach((pos, i) => { newFullOrder[pos] = newFileIds[i]; });
 
     onReorder(newFullOrder);
     dragId.current = null;
@@ -197,6 +202,121 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
     files.length === 2 ? 'grid-cols-2' :
     'grid-cols-3';
 
+  function renderCellContent(file: ArtworkFile, url: string | undefined, isLoading: boolean) {
+    if (file.mime_type.startsWith('image/')) {
+      return (
+        <>
+          {isLoading && !url && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+            </div>
+          )}
+          {url && (
+            <img src={url} alt={file.filename} className="h-full w-full object-cover" />
+          )}
+        </>
+      );
+    }
+
+    if (file.mime_type === 'application/pdf') {
+      return (
+        <>
+          <div className="flex h-full flex-col items-center justify-center gap-1.5">
+            <div className="rounded-lg bg-red-100 p-3 dark:bg-red-900/30">
+              <FileIcon className="h-7 w-7 text-red-500" />
+            </div>
+            <span className="max-w-full truncate px-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+              {file.filename}
+            </span>
+          </div>
+          {isLoading && (
+            <div className="absolute right-1.5 top-1.5">
+              <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
+            </div>
+          )}
+        </>
+      );
+    }
+
+    // text/plain, application/json, etc.
+    return (
+      <>
+        <div className="flex h-full flex-col items-center justify-center gap-1.5">
+          <div className="rounded-lg bg-blue-100 p-3 dark:bg-blue-900/30">
+            <FileText className="h-7 w-7 text-blue-500" />
+          </div>
+          <span className="max-w-full truncate px-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+            {file.filename}
+          </span>
+        </div>
+        {isLoading && (
+          <div className="absolute right-1.5 top-1.5">
+            <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
+          </div>
+        )}
+      </>
+    );
+  }
+
+  function renderLightboxContent(file: ArtworkFile, url: string | undefined) {
+    const isImage = file.mime_type.startsWith('image/');
+    const isPdf = file.mime_type === 'application/pdf';
+    const isText = file.mime_type === 'text/plain' || file.mime_type === 'application/json';
+
+    if (!url) {
+      return (
+        <div className="flex h-64 w-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-white/60" />
+        </div>
+      );
+    }
+
+    if (isImage) {
+      return (
+        <img
+          src={url}
+          alt={file.filename}
+          className="max-h-[85vh] max-w-[85vw] object-contain"
+        />
+      );
+    }
+
+    if (isPdf) {
+      return (
+        <iframe
+          src={url}
+          title={file.filename}
+          className="h-[85vh] w-[90vw] rounded-lg bg-white"
+        />
+      );
+    }
+
+    if (isText) {
+      const text = textContents.get(file.id);
+      if (!text) {
+        return (
+          <div className="flex h-64 w-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-white/60" />
+          </div>
+        );
+      }
+      return (
+        <pre className="max-h-[85vh] max-w-[85vw] overflow-auto rounded-lg bg-zinc-950 p-6 font-mono text-sm text-zinc-100 whitespace-pre-wrap">
+          {text}
+        </pre>
+      );
+    }
+
+    // Fallback: offer no inline preview
+    return (
+      <div className="flex flex-col items-center gap-3 text-white/70">
+        <FileIcon className="h-12 w-12" />
+        <p className="text-sm">{file.filename}</p>
+        <p className="text-xs opacity-60">No preview available</p>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className={`grid ${cols} gap-2`}>
@@ -204,6 +324,7 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
           const url = urls.get(file.id);
           const isLoading = loadingIds.has(file.id);
           const isDragOver = dragOverId === file.id;
+          const isFirst = idx === 0 && files.length > 1;
 
           return (
             <div
@@ -213,22 +334,24 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
               onDragOver={(e) => editMode && handleDragOver(e, file.id)}
               onDrop={(e) => editMode && handleDrop(e, file.id)}
               onDragEnd={handleDragEnd}
-              onClick={() => { if (!editMode && url) setLightboxIndex(idx); }}
+              onClick={() => { if (!editMode) setLightboxIndex(idx); }}
               className={[
                 'relative aspect-square overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800',
-                !editMode && url ? 'cursor-pointer' : '',
+                !editMode ? 'cursor-pointer' : '',
                 editMode ? 'cursor-grab active:cursor-grabbing' : '',
                 isDragOver ? 'ring-2 ring-zinc-400 dark:ring-zinc-500' : '',
               ].join(' ')}
             >
-              {isLoading && !url && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+              {renderCellContent(file, url, isLoading)}
+
+              {/* Main image badge */}
+              {isFirst && (
+                <div className="pointer-events-none absolute bottom-1.5 left-1.5 rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
+                  Main
                 </div>
               )}
-              {url && (
-                <img src={url} alt={file.filename} className="h-full w-full object-cover" />
-              )}
+
+              {/* Drag handle in edit mode */}
               {editMode && (
                 <div className="pointer-events-none absolute left-1.5 top-1.5 rounded bg-black/40 p-1">
                   <GripVertical className="h-3.5 w-3.5 text-white" />
@@ -275,26 +398,14 @@ export function ImageGrid({ files, editMode, fileOrder, onReorder }: ImageGridPr
             </button>
           )}
 
-          {/* Image */}
+          {/* File content */}
           <div onClick={(e) => e.stopPropagation()}>
-            {(() => {
-              const file = files[lightboxIndex];
-              const url = urls.get(file.id);
-              if (!url) {
-                return (
-                  <div className="flex h-64 w-64 items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-white/60" />
-                  </div>
-                );
-              }
-              return (
-                <img
-                  src={url}
-                  alt={file.filename}
-                  className="max-h-[85vh] max-w-[85vw] object-contain"
-                />
-              );
-            })()}
+            {renderLightboxContent(files[lightboxIndex], urls.get(files[lightboxIndex].id))}
+          </div>
+
+          {/* Filename label */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 max-w-[60vw] truncate rounded bg-black/40 px-3 py-1 text-xs text-white/70">
+            {files[lightboxIndex].filename}
           </div>
 
           {/* Dot indicators */}
