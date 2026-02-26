@@ -11,7 +11,7 @@ export const GET: APIRoute = async (context) => {
   try {
     const result = await query(
       'SELECT id, name FROM collections WHERE user_id=$1 ORDER BY name',
-      [user.id]
+      [user.userId]
     );
     return new Response(JSON.stringify({ collections: result.rows }), {
       status: 200,
@@ -43,7 +43,7 @@ export const POST: APIRoute = async (context) => {
 
     const result = await query(
       'INSERT INTO collections(user_id, name) VALUES($1, $2) ON CONFLICT (user_id, name) DO UPDATE SET name=EXCLUDED.name RETURNING id, name',
-      [user.id, name]
+      [user.userId, name]
     );
 
     return new Response(JSON.stringify({ collection: result.rows[0] }), {

@@ -18,7 +18,7 @@ export const GET: APIRoute = async (context) => {
        LEFT JOIN artists a ON ae.artist_id = a.id
        LEFT JOIN collections c ON ae.collection_id = c.id
        WHERE ae.blockchain_artwork_id=$1 AND ae.user_id=$2`,
-      [artworkId, user.id]
+      [artworkId, user.userId]
     );
 
     const extras = result.rows[0] ?? null;
@@ -58,7 +58,7 @@ export const PUT: APIRoute = async (context) => {
          collection_id = EXCLUDED.collection_id,
          file_order = EXCLUDED.file_order,
          updated_at = NOW()`,
-      [artworkId, user.id, title || null, description_html || null, creation_date || null, era || null, artist_id || null, collection_id || null, file_order ? JSON.stringify(file_order) : null]
+      [artworkId, user.userId, title || null, description_html || null, creation_date || null, era || null, artist_id || null, collection_id || null, file_order ? JSON.stringify(file_order) : null]
     );
 
     // Mirror to on-chain fields — description and metadata as base64-encoded plaintext.

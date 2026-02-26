@@ -91,7 +91,7 @@ export const POST: APIRoute = async (context) => {
     // Clean up postgres artwork_extras row
     await query(
       `DELETE FROM artwork_extras WHERE blockchain_artwork_id = $1 AND user_id = $2`,
-      [parseInt(id), user.id]
+      [parseInt(id), user.userId]
     );
 
     return new Response(JSON.stringify({ success: true }), {

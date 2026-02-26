@@ -43,7 +43,7 @@ export const GET: APIRoute = async (context) => {
     // PostgreSQL-based filters (artist_id, collection_id, era)
     if (artistId || collectionId || era) {
       const conditions: string[] = ['user_id=$1'];
-      const params: any[] = [user.id];
+      const params: any[] = [user.userId];
       let paramIdx = 2;
 
       if (artistId) {
@@ -78,7 +78,7 @@ export const GET: APIRoute = async (context) => {
          LEFT JOIN artists a ON ae.artist_id = a.id
          LEFT JOIN collections c ON ae.collection_id = c.id
          WHERE ae.user_id=$1 AND ae.blockchain_artwork_id = ANY($2::bigint[])`,
-        [user.id, artworkIds]
+        [user.userId, artworkIds]
       );
       for (const row of extrasResult.rows) {
         extrasMap.set(String(row.blockchain_artwork_id), row);
