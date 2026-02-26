@@ -11,14 +11,24 @@ interface ArtworkCardProps {
     collection_name?: string | null;
     era?: string | null;
     creation_date?: string | null;
+    description_html?: string | null;
   };
   files?: Array<{ id: string; mime_type: string }> | null;
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
 }
 
 export function ArtworkCard({ artwork, files }: ArtworkCardProps) {
   const imageFiles = (files ?? []).filter((f) => f.mime_type.startsWith('image/'));
   const mainFile = imageFiles[0] ?? null;
   const additionalFiles = imageFiles.slice(1, 4);
+
+  const descriptionText = artwork.description_html ? stripHtml(artwork.description_html) : '';
+  const truncatedDescription = descriptionText.length > 150
+    ? descriptionText.slice(0, 150) + '\u2026'
+    : descriptionText;
 
   return (
     <Link
@@ -48,6 +58,11 @@ export function ArtworkCard({ artwork, files }: ArtworkCardProps) {
       <h3 className="truncate text-sm font-medium text-zinc-900 group-hover:text-zinc-700 dark:text-zinc-100 dark:group-hover:text-zinc-300">
         {artwork.title}
       </h3>
+      {truncatedDescription && (
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 line-clamp-3">
+          {truncatedDescription}
+        </p>
+      )}
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
         {new Date(artwork.created_at).toLocaleDateString()}
       </p>

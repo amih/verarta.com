@@ -541,6 +541,14 @@ export default function ArtworkDetailPage() {
           </div>
         )}
 
+        {/* Description (read mode) */}
+        {!editMode && extras?.description_html && extras.description_html !== '<p></p>' && (
+          <div
+            className="mt-4 prose prose-sm dark:prose-invert max-w-none text-zinc-600 dark:text-zinc-400"
+            dangerouslySetInnerHTML={{ __html: extras.description_html }}
+          />
+        )}
+
         {/* Inline edit form */}
         {editMode && (
           <div className="mt-4 space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
@@ -652,17 +660,6 @@ export default function ArtworkDetailPage() {
           </div>
         )}
       </div>
-
-      {/* Description */}
-      {!editMode && extras?.description_html && extras.description_html !== '<p></p>' && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">Description</h2>
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none text-zinc-600 dark:text-zinc-400"
-            dangerouslySetInnerHTML={{ __html: extras.description_html }}
-          />
-        </div>
-      )}
 
       {/* File grid (images, PDFs, text) */}
       {(() => {
