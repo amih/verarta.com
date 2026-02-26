@@ -61,30 +61,40 @@ export const PUT: APIRoute = async (context) => {
       [artworkId, user.userId, title || null, description_html || null, creation_date || null, era || null, artist_id || null, collection_id || null, file_order ? JSON.stringify(file_order) : null]
     );
 
-    // Mirror to on-chain fields — description and metadata as base64-encoded plaintext.
-    // This is best-effort; Postgres remains the authoritative editable store.
+    // Record extras in blockchain action history via setextras.
+    // The action trace is the single source of truth; Postgres is just a cache.
+    // This is best-effort — Postgres save already succeeded above.
     try {
-      const descriptionEncoded = description_html
-        ? Buffer.from(description_html).toString('base64')
-        : '';
-      const metadataObj: Record<string, unknown> = {};
-      if (creation_date) metadataObj.creation_date = creation_date;
-      if (era) metadataObj.era = era;
-      if (artist_id) metadataObj.artist_id = artist_id;
-      if (collection_id) metadataObj.collection_id = collection_id;
-      const metadataEncoded = Object.keys(metadataObj).length > 0
-        ? Buffer.from(JSON.stringify(metadataObj)).toString('base64')
-        : '';
+      // Resolve artist and collection names so chain history is self-contained
+      let artist_name: string | null = null;
+      let collection_name: string | null = null;
+      if (artist_id) {
+        const artistResult = await query('SELECT name FROM artists WHERE id=$1', [artist_id]);
+        artist_name = artistResult.rows[0]?.name ?? null;
+      }
+      if (collection_id) {
+        const collectionResult = await query('SELECT name FROM collections WHERE id=$1', [collection_id]);
+        collection_name = collectionResult.rows[0]?.name ?? null;
+      }
 
-      await buildAndSignTransaction('updateart', {
+      const extras_json = JSON.stringify({
+        title: title || null,
+        description_html: description_html || null,
+        creation_date: creation_date || null,
+        era: era || null,
+        artist_name,
+        collection_name,
+        file_order: file_order || null,
+      });
+
+      await buildAndSignTransaction('setextras', {
         artwork_id: Number(artworkId),
         owner: user.blockchainAccount,
-        description_encrypted: descriptionEncoded,
-        metadata_encrypted: metadataEncoded,
+        extras_json,
       });
     } catch (chainError) {
       // Non-fatal — log and continue; Postgres save already succeeded
-      console.error('[extras] on-chain updateart failed (non-fatal):', chainError);
+      console.error('[extras] on-chain setextras failed (non-fatal):', chainError);
     }
 
     return new Response(JSON.stringify({ success: true }), {

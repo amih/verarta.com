@@ -186,18 +186,17 @@ public:
    );
 
    /**
-    * Update on-chain metadata for an existing artwork
-    * @param artwork_id - Artwork ID to update
-    * @param owner - Owner account (must match)
-    * @param description_encrypted - New encrypted description (base64); empty string leaves unchanged
-    * @param metadata_encrypted - New encrypted JSON metadata (base64); empty string leaves unchanged
+    * Store artwork extras in action history (no RAM writes).
+    * The action trace is indexed by Hyperion and serves as the single source of truth.
+    * @param artwork_id - Artwork ID
+    * @param owner - Owner account (must match artwork owner)
+    * @param extras_json - JSON string with extras (title, description_html, creation_date, era, artist_name, collection_name, file_order)
     */
    [[eosio::action]]
-   void updateart(
+   void setextras(
       uint64_t artwork_id,
       name owner,
-      std::string description_encrypted,
-      std::string metadata_encrypted
+      std::string extras_json
    );
 
    /**

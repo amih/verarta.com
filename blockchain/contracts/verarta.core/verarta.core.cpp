@@ -481,28 +481,25 @@ void verartatoken::transferart(
    });
 }
 
-void verartatoken::updateart(
+void verartatoken::setextras(
    uint64_t artwork_id,
    name owner,
-   std::string description_encrypted,
-   std::string metadata_encrypted
+   std::string extras_json
 ) {
    // Allow the owner directly, or the contract's service key (for backend-initiated updates)
    check(has_auth(owner) || has_auth(get_self()), "missing required authority");
 
    check(artwork_id > 0, "artwork_id must be positive");
-   check(description_encrypted.size() <= 10240, "description_encrypted too long");
-   check(metadata_encrypted.size() <= 10240, "metadata_encrypted too long");
+   check(extras_json.size() > 0, "extras_json cannot be empty");
+   check(extras_json.size() <= 20480, "extras_json too long (max 20KB)");
 
    artworks_table artworks(get_self(), get_self().value);
    auto artwork_itr = artworks.find(artwork_id);
    check(artwork_itr != artworks.end(), "artwork not found");
    check(artwork_itr->owner == owner, "artwork owner mismatch");
 
-   artworks.modify(artwork_itr, same_payer, [&](auto& row) {
-      row.description_encrypted = description_encrypted;
-      row.metadata_encrypted = metadata_encrypted;
-   });
+   // No RAM writes — the action parameters are recorded in the action trace
+   // and indexed by Hyperion for later retrieval.
 }
 
 void verartatoken::addadmindek(uint64_t file_id, std::string new_encrypted_dek) {
@@ -655,4 +652,4 @@ uint64_t verartatoken::calculate_next_monday(uint64_t from_time) {
 } // namespace verarta
 
 // Dispatch actions
-EOSIO_DISPATCH(verarta::verartatoken, (createart)(updateart)(addfile)(uploadchunk)(completefile)(setquota)(addadminkey)(rmadminkey)(addadmindek)(logaccess)(deleteart)(deletefile)(transferart))
+EOSIO_DISPATCH(verarta::verartatoken, (createart)(setextras)(addfile)(uploadchunk)(completefile)(setquota)(addadminkey)(rmadminkey)(addadmindek)(logaccess)(deleteart)(deletefile)(transferart))

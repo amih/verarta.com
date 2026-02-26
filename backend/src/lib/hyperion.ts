@@ -46,6 +46,29 @@ export async function getFileChunks(fileId: number, owner: string) {
   return chunks;
 }
 
+// Get the latest extras for an artwork from chain history.
+// Queries setextras actions and returns the most recent extras_json (parsed).
+export async function getArtworkExtras(artworkId: number) {
+  const result = await getActions({
+    filter: 'verarta.core:setextras',
+    limit: 100,
+    sort: 'desc',
+  });
+
+  // Find the most recent setextras action for this artwork_id
+  const match = result.actions?.find(
+    (action: any) => action.act.data.artwork_id === artworkId
+  );
+
+  if (!match) return null;
+
+  try {
+    return JSON.parse(match.act.data.extras_json);
+  } catch {
+    return match.act.data.extras_json;
+  }
+}
+
 // Reassemble file from chunks
 export async function downloadFile(fileId: number, owner: string) {
   const chunks = await getFileChunks(fileId, owner);

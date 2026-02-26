@@ -33,7 +33,7 @@ export function ArtworkCard({ artwork, files }: ArtworkCardProps) {
   return (
     <Link
       href={`/dashboard/artworks/${artwork.id}`}
-      className="group block rounded-lg border border-zinc-200 p-4 transition-colors hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
+      className="group block rounded-none border border-slate-400 bg-slate-200 p-4 transition-colors hover:border-slate-500 dark:border-slate-600 dark:bg-slate-700/50 dark:hover:border-slate-400"
     >
       {mainFile ? (
         <ArtworkThumbnail fileId={mainFile.id} mimeType={mainFile.mime_type} />
