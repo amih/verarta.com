@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import { logout } from '@/lib/api/auth';
 import { getAccount, queryTable } from '@/lib/api/chain';
-import { Menu, X, LogOut, Upload, ShieldCheck, Home, Info, FileText, LayoutDashboard, Loader2, Download, Search } from 'lucide-react';
+import { Menu, X, LogOut, Upload, ShieldCheck, Home, Info, FileText, LayoutDashboard, Loader2, Download, Search, Sun, Moon } from 'lucide-react';
 import { InstallButton } from './InstallPrompt';
 
 interface QuotaRow {
@@ -54,6 +54,19 @@ export function Header() {
   const [userOpen, setUserOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
+
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains('dark'));
+  }, []);
+
+  function toggleTheme() {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('theme', next ? 'dark' : 'light');
+  }
 
   const { data: accountData } = useQuery({
     queryKey: ['chain-account', user?.blockchain_account],
@@ -180,7 +193,15 @@ export function Header() {
           </Link>
         </div>
 
-        {/* Right: user menu */}
+        {/* Right: theme toggle + user menu */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleTheme}
+            className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            aria-label="Toggle dark mode"
+          >
+            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
         {user && (
           <div className="relative" ref={userRef}>
             <button
@@ -307,6 +328,7 @@ export function Header() {
             )}
           </div>
         )}
+        </div>
       </div>
     </header>
   );
