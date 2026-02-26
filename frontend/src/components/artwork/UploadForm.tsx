@@ -332,6 +332,40 @@ export function UploadForm() {
         )}
       </div>
 
+      {/* Description — Tiptap editor */}
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          Description
+        </label>
+        {/* Toolbar */}
+        <div className="flex gap-1 border border-b-0 border-zinc-300 rounded-t-lg bg-white px-2 py-1 dark:border-zinc-600 dark:bg-zinc-800">
+          <button
+            type="button"
+            onClick={() => editor?.chain().focus().toggleBold().run()}
+            className={`rounded px-2 py-1 text-xs font-bold ${editor?.isActive('bold') ? 'bg-zinc-200 dark:bg-zinc-600' : 'hover:bg-zinc-100 dark:hover:bg-zinc-700'}`}
+          >
+            B
+          </button>
+          <button
+            type="button"
+            onClick={() => editor?.chain().focus().toggleItalic().run()}
+            className={`rounded px-2 py-1 text-xs italic ${editor?.isActive('italic') ? 'bg-zinc-200 dark:bg-zinc-600' : 'hover:bg-zinc-100 dark:hover:bg-zinc-700'}`}
+          >
+            I
+          </button>
+          <button
+            type="button"
+            onClick={() => editor?.chain().focus().toggleBulletList().run()}
+            className={`rounded px-2 py-1 text-xs ${editor?.isActive('bulletList') ? 'bg-zinc-200 dark:bg-zinc-600' : 'hover:bg-zinc-100 dark:hover:bg-zinc-700'}`}
+          >
+            •—
+          </button>
+        </div>
+        <div className="rounded-b-lg border border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-800">
+          <EditorContent editor={editor} />
+        </div>
+      </div>
+
       {/* Collapsible "More details" section */}
       <div>
         <button
@@ -345,40 +379,6 @@ export function UploadForm() {
 
         {showMore && (
           <div className="mt-4 space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-            {/* Description — Tiptap editor */}
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Description
-              </label>
-              {/* Toolbar */}
-              <div className="flex gap-1 border border-b-0 border-zinc-300 rounded-t-lg bg-white px-2 py-1 dark:border-zinc-600 dark:bg-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => editor?.chain().focus().toggleBold().run()}
-                  className={`rounded px-2 py-1 text-xs font-bold ${editor?.isActive('bold') ? 'bg-zinc-200 dark:bg-zinc-600' : 'hover:bg-zinc-100 dark:hover:bg-zinc-700'}`}
-                >
-                  B
-                </button>
-                <button
-                  type="button"
-                  onClick={() => editor?.chain().focus().toggleItalic().run()}
-                  className={`rounded px-2 py-1 text-xs italic ${editor?.isActive('italic') ? 'bg-zinc-200 dark:bg-zinc-600' : 'hover:bg-zinc-100 dark:hover:bg-zinc-700'}`}
-                >
-                  I
-                </button>
-                <button
-                  type="button"
-                  onClick={() => editor?.chain().focus().toggleBulletList().run()}
-                  className={`rounded px-2 py-1 text-xs ${editor?.isActive('bulletList') ? 'bg-zinc-200 dark:bg-zinc-600' : 'hover:bg-zinc-100 dark:hover:bg-zinc-700'}`}
-                >
-                  •—
-                </button>
-              </div>
-              <div className="rounded-b-lg border border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-800">
-                <EditorContent editor={editor} />
-              </div>
-            </div>
-
             {/* Artist combobox */}
             <Combobox
               label="Artist"
