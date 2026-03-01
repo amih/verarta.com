@@ -123,14 +123,13 @@ export function Header() {
   }
 
   const navLinks = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/dashboard', label: 'Home', icon: Home },
     { href: '/dashboard/upload', label: 'Upload Artwork', icon: Upload },
     ...(user?.is_admin ? [{ href: '/dashboard/admin', label: 'Admin', icon: ShieldCheck }] : []),
     { href: '/dashboard/settings', label: 'Manage My Public Collection Page', icon: Settings },
     { href: '/explorer', label: 'Explorer', icon: Search },
     { href: '/about', label: 'About', icon: Info },
     { href: '/disclaimer', label: 'Disclaimer', icon: FileText },
-    { href: '/', label: 'Home', icon: Home },
   ];
 
   const account = accountData?.account;
