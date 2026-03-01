@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import { logout } from '@/lib/api/auth';
 import { getAccount, queryTable } from '@/lib/api/chain';
-import { Menu, X, LogOut, Upload, ShieldCheck, Home, Info, FileText, LayoutDashboard, Loader2, Download, Search, Sun, Moon } from 'lucide-react';
+import { Menu, X, LogOut, Upload, ShieldCheck, Home, Info, FileText, LayoutDashboard, Loader2, Download, Search, Sun, Moon, Settings } from 'lucide-react';
 import { InstallButton } from './InstallPrompt';
 
 interface QuotaRow {
@@ -126,6 +126,7 @@ export function Header() {
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/dashboard/upload', label: 'Upload Artwork', icon: Upload },
     ...(user?.is_admin ? [{ href: '/dashboard/admin', label: 'Admin', icon: ShieldCheck }] : []),
+    { href: '/dashboard/settings', label: 'Manage My Public Collection Page', icon: Settings },
     { href: '/explorer', label: 'Explorer', icon: Search },
     { href: '/about', label: 'About', icon: Info },
     { href: '/disclaimer', label: 'Disclaimer', icon: FileText },
