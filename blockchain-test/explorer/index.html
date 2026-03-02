@@ -659,12 +659,13 @@ async function loadHistoricalData() {
   var twoHoursAgoISO = new Date(Date.now() - CHART_MINUTES * 60000).toISOString();
   var baseUrl = HYPERION_API + '/v2/history/get_actions?limit=1000&sort=asc&after=' + twoHoursAgoISO;
 
-  // 1. Actions from Hyperion (exclude onblock)
-  // 2. Blocks from Hyperion (onblock actions = 1 per block)
+  // 1. Actions from Hyperion (exclude onblock) — for actions chart
+  // 2. Blocks from Hyperion get_blocks — for blocks chart + feed
+  // 3. Chain info — for header
   try {
     var results = await Promise.all([
       fetch(baseUrl).then(function(r) { return r.json(); }),
-      fetch(baseUrl + '&filter=eosio:onblock').then(function(r) { return r.json(); }),
+      fetch(HYPERION_API + '/v2/history/get_blocks?limit=1000&sort=asc&after=' + twoHoursAgoISO).then(function(r) { return r.json(); }),
       fetch(CHAIN_API + '/v1/chain/get_info', { method: 'POST' }).then(function(r) { return r.json(); }),
     ]);
 
@@ -680,31 +681,26 @@ async function loadHistoricalData() {
     });
     console.log('[init] Loaded ' + actionTimestamps.length + ' historical actions');
 
-    // Populate block timestamps from onblock actions
-    (blocksData.actions || []).forEach(function(a) {
-      blockTimestamps.push(new Date(a['@timestamp']).getTime());
+    // Populate block timestamps + feed from Hyperion blocks
+    var blocks = blocksData.blocks || [];
+    blocks.forEach(function(b) {
+      blockTimestamps.push(new Date(b['@timestamp']).getTime());
     });
-    console.log('[init] Loaded ' + blockTimestamps.length + ' historical blocks');
+    console.log('[init] Loaded ' + blocks.length + ' historical blocks');
 
     // Update chain info header
     lastHeadBlockNum = chainInfo.head_block_num;
     updateChainUI(chainInfo);
 
-    // Populate Live Blocks feed with last 50 blocks from chain API
-    var headNum = chainInfo.head_block_num;
-    var feedStart = Math.max(1, headNum - MAX_FEED_ITEMS + 1);
-    var feedPromises = [];
-    for (var i = feedStart; i <= headNum; i++) feedPromises.push(fetchBlock(i));
-    var feedBlocks = await Promise.all(feedPromises);
-    feedBlocks.forEach(function(block) {
-      if (block) {
-        blockFeedItems.push({
-          block_num: block.block_num,
-          producer: block.producer,
-          timestamp: block.timestamp,
-          tx_count: (block.transactions || []).length,
-        });
-      }
+    // Populate Live Blocks feed with last 50 blocks (already have the data)
+    var feedBlocks = blocks.slice(-MAX_FEED_ITEMS);
+    feedBlocks.forEach(function(b) {
+      blockFeedItems.push({
+        block_num: b.block_num,
+        producer: b.producer,
+        timestamp: b['@timestamp'],
+        tx_count: b.trx_count || 0,
+      });
     });
     blockFeedItems.sort(function(a, b) { return b.block_num - a.block_num; });
     renderBlockFeed();
