@@ -130,4 +130,22 @@ export class ProducerApi {
     );
     return previousBlockNum;
   }
+
+  async waitForNBlocks(
+    previousBlockNum: number,
+    count: number,
+    timeoutMs: number
+  ): Promise<number> {
+    const perBlockTimeout = Math.max(Math.floor(timeoutMs / count), 500);
+    let currentBlockNum = previousBlockNum;
+    for (let i = 0; i < count; i++) {
+      const newBlockNum = await this.waitForNewBlock(currentBlockNum, perBlockTimeout);
+      if (newBlockNum <= currentBlockNum) {
+        console.warn(`[producer-api] Burst stalled after ${i}/${count} blocks`);
+        break;
+      }
+      currentBlockNum = newBlockNum;
+    }
+    return currentBlockNum;
+  }
 }

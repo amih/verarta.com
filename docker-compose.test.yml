@@ -1,0 +1,202 @@
+version: '3.8'
+
+services:
+  # ──────────────────────────────────────────────────────────────
+  # Test Chain — Block Producer Nodes (4 nodes, only producer1 active)
+  # ──────────────────────────────────────────────────────────────
+
+  test-producer1:
+    image: verarta/spring-500ms:latest
+    container_name: verarta-test-producer1
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "18000:8888"    # Chain API
+      - "19000:9876"    # P2P
+    volumes:
+      - ./blockchain-test/genesis.json:/config/genesis.json:ro
+      - ./blockchain-test/config/producer1.ini:/config/config.ini:ro
+      - test-producer1-data:/data
+    networks:
+      - verarta-test-net
+    restart: unless-stopped
+
+  test-producer2:
+    image: verarta/spring-500ms:latest
+    container_name: verarta-test-producer2
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "18001:8888"
+      - "19001:9876"
+    volumes:
+      - ./blockchain-test/genesis.json:/config/genesis.json:ro
+      - ./blockchain-test/config/producer2.ini:/config/config.ini:ro
+      - test-producer2-data:/data
+    networks:
+      - verarta-test-net
+    restart: unless-stopped
+    depends_on:
+      - test-producer1
+
+  test-producer3:
+    image: verarta/spring-500ms:latest
+    container_name: verarta-test-producer3
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "18002:8888"
+      - "19002:9876"
+    volumes:
+      - ./blockchain-test/genesis.json:/config/genesis.json:ro
+      - ./blockchain-test/config/producer3.ini:/config/config.ini:ro
+      - test-producer3-data:/data
+    networks:
+      - verarta-test-net
+    restart: unless-stopped
+    depends_on:
+      - test-producer1
+
+  test-producer4:
+    image: verarta/spring-500ms:latest
+    container_name: verarta-test-producer4
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "18003:8888"
+      - "19003:9876"
+    volumes:
+      - ./blockchain-test/genesis.json:/config/genesis.json:ro
+      - ./blockchain-test/config/producer4.ini:/config/config.ini:ro
+      - test-producer4-data:/data
+    networks:
+      - verarta-test-net
+    restart: unless-stopped
+    depends_on:
+      - test-producer1
+
+  # ──────────────────────────────────────────────────────────────
+  # Test Chain — Full History Node
+  # ──────────────────────────────────────────────────────────────
+
+  test-history:
+    image: verarta/spring-500ms:latest
+    container_name: verarta-test-history
+    command: >
+      --genesis-json /config/genesis.json
+      --config-dir /config
+      --data-dir /data
+      --disable-replay-opts
+    ports:
+      - "18888:8888"    # Chain API (main endpoint)
+      - "19004:9876"    # P2P
+      - "18080:8080"    # State History (SHiP)
+    volumes:
+      - ./blockchain-test/genesis.json:/config/genesis.json:ro
+      - ./blockchain-test/config/history.ini:/config/config.ini:ro
+      - test-history-data:/data
+    networks:
+      - verarta-test-net
+    restart: unless-stopped
+    depends_on:
+      - test-producer1
+      - test-producer2
+      - test-producer3
+      - test-producer4
+
+  # ──────────────────────────────────────────────────────────────
+  # Test Chain — Wallet (keosd) — for bootstrap only
+  # ──────────────────────────────────────────────────────────────
+
+  test-wallet:
+    image: verarta/spring-500ms:latest
+    container_name: verarta-test-wallet
+    entrypoint: ["keosd"]
+    command: >
+      --http-server-address=0.0.0.0:8888
+      --http-validate-host=false
+      --unlock-timeout=999999999
+      --wallet-dir=/wallet
+    ports:
+      - "16666:8888"
+    volumes:
+      - test-wallet-data:/wallet
+    networks:
+      - verarta-test-net
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────────
+  # Test Chain — Hyperion Indexer + API
+  # Reuses shared ES, Redis, RabbitMQ, MongoDB with namespace isolation
+  # ──────────────────────────────────────────────────────────────
+
+  test-hyperion:
+    image: verarta/hyperion:latest
+    container_name: verarta-test-hyperion
+    depends_on:
+      - test-history
+    ports:
+      - "17000:7000"
+      - "17001:7001"   # Socket.IO streaming
+    volumes:
+      - ./blockchain-test/hyperion/config:/hyperion-history-api/config/chains:ro
+      - ./blockchain-test/hyperion/connections.json:/hyperion-history-api/config/connections.json:ro
+      - ./blockchain-test/hyperion/combined-ecosystem.config.cjs:/hyperion-history-api/pm2/combined-ecosystem.config.cjs:ro
+    networks:
+      - verarta-test-net
+      - verarta-net
+    restart: unless-stopped
+    command: ["pm2-runtime", "start", "pm2/combined-ecosystem.config.cjs"]
+
+  # ──────────────────────────────────────────────────────────────
+  # Test Chain — Pace Controller
+  # ──────────────────────────────────────────────────────────────
+
+  pace-controller:
+    build:
+      context: ./blockchain-test/pace-controller
+    container_name: verarta-test-pace-controller
+    environment:
+      - PRODUCER_URLS=http://test-producer1:8888,http://test-producer2:8888,http://test-producer3:8888,http://test-producer4:8888
+      - PORT=3100
+      - SLOW_INTERVAL_MS=300000
+      - MEDIUM_INTERVAL_MS=20000
+      - FAST_THRESHOLD=5
+      - FAST_WINDOW_MS=5000
+      - IDLE_TIMEOUT_MS=60000
+      - COOLDOWN_MS=10000
+      - BURST_BLOCK_COUNT=4
+    ports:
+      - "13100:3100"
+    networks:
+      - verarta-test-net
+    restart: unless-stopped
+    depends_on:
+      - test-producer1
+
+volumes:
+  test-producer1-data:
+  test-producer2-data:
+  test-producer3-data:
+  test-producer4-data:
+  test-history-data:
+  test-wallet-data:
+
+networks:
+  verarta-test-net:
+    driver: bridge
+  verarta-net:
+    external: true
+    name: app_verarta-net

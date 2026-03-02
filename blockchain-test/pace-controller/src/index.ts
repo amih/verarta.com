@@ -180,10 +180,11 @@ async function mainLoop(): Promise<void> {
     producing = true;
     await ensureResumed();
 
-    // Step 2: Wait for a new block (use most of the interval budget)
+    // Step 2: Wait for burst of blocks (use most of the interval budget)
     const waitBudget = Math.max(intervalMs - 1000, config.blockWaitTimeoutMs);
-    const newBlockNum = await producer.waitForNewBlock(
+    const newBlockNum = await producer.waitForNBlocks(
       lastKnownHeadBlockNum,
+      config.burstBlockCount,
       waitBudget
     );
 

@@ -674,17 +674,10 @@ function renderChart(canvasId, title, buckets, color, yScale) {
 }
 
 var blocksYScale = {
-  type: 'logarithmic',
-  min: 0.1,
+  type: 'linear',
+  min: 0,
   max: 120,
-  ticks: {
-    color: '#9eaab6',
-    callback: function(value) {
-      if (value <= 0.1) return '0';
-      if ([1, 2, 5, 10, 20, 50, 120].indexOf(value) !== -1) return value;
-      return '';
-    },
-  },
+  ticks: { color: '#9eaab6' },
   grid: { color: '#21262d' },
 };
 
