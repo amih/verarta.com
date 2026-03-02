@@ -176,13 +176,9 @@ async function mainLoop(): Promise<void> {
         : config.slowIntervalMs;
     const cycleStart = Date.now();
 
-    // Step 1: Resume a single producer (round-robin rotation)
-    if (!isPaused) {
-      await ensurePaused();
-    }
+    // Step 1: Resume all producers so the scheduled one can produce
     producing = true;
-    await producer.resumeOne();
-    isPaused = false;
+    await ensureResumed();
 
     // Step 2: Wait for a new block (use most of the interval budget)
     const waitBudget = Math.max(intervalMs - 1000, config.blockWaitTimeoutMs);
