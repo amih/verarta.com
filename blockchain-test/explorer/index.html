@@ -683,38 +683,51 @@ function scheduleChartRender() {
 }
 
 // ─── Historical Data ───
+function parseTs(ts) {
+  return new Date(ts.endsWith('Z') ? ts : ts + 'Z').getTime();
+}
+
+async function fetchAllPages(url, key) {
+  var all = [];
+  var skip = 0;
+  var limit = 1000;
+  while (true) {
+    var res = await fetch(url + '&limit=' + limit + '&skip=' + skip);
+    var data = await res.json();
+    var items = data[key] || [];
+    all = all.concat(items);
+    if (items.length < limit) break;
+    skip += limit;
+  }
+  return all;
+}
+
 async function loadHistoricalData() {
   var twoHoursAgoISO = new Date(Date.now() - CHART_MINUTES * 60000).toISOString();
-  var baseUrl = HYPERION_API + '/v2/history/get_actions?limit=1000&sort=asc&after=' + twoHoursAgoISO;
 
-  // 1. Actions from Hyperion (exclude onblock) — for actions chart
-  // 2. Blocks from Hyperion get_blocks — for blocks chart + feed
-  // 3. Chain info — for header
   try {
+    // Fetch all pages in parallel with chain info
     var results = await Promise.all([
-      fetch(baseUrl).then(function(r) { return r.json(); }),
-      fetch(HYPERION_API + '/v2/history/get_blocks?limit=1000&sort=asc&after=' + twoHoursAgoISO).then(function(r) { return r.json(); }),
+      fetchAllPages(HYPERION_API + '/v2/history/get_actions?sort=asc&after=' + twoHoursAgoISO, 'actions'),
+      fetchAllPages(HYPERION_API + '/v2/history/get_blocks?sort=asc&after=' + twoHoursAgoISO, 'blocks'),
       fetch(CHAIN_API + '/v1/chain/get_info', { method: 'POST' }).then(function(r) { return r.json(); }),
     ]);
 
-    var actionsData = results[0];
-    var blocksData = results[1];
+    var actions = results[0];
+    var blocks = results[1];
     var chainInfo = results[2];
 
     // Populate action timestamps (filter out onblock)
-    (actionsData.actions || []).forEach(function(a) {
+    actions.forEach(function(a) {
       var act = a.act || {};
       if (act.name === 'onblock' && act.account === 'eosio') return;
-      var ts = a['@timestamp'];
-      actionTimestamps.push(new Date(ts.endsWith('Z') ? ts : ts + 'Z').getTime());
+      actionTimestamps.push(parseTs(a['@timestamp']));
     });
     console.log('[init] Loaded ' + actionTimestamps.length + ' historical actions');
 
-    // Populate block timestamps + feed from Hyperion blocks
-    var blocks = blocksData.blocks || [];
+    // Populate block timestamps from Hyperion blocks
     blocks.forEach(function(b) {
-      var ts = b['@timestamp'];
-      blockTimestamps.push(new Date(ts.endsWith('Z') ? ts : ts + 'Z').getTime());
+      blockTimestamps.push(parseTs(b['@timestamp']));
     });
     console.log('[init] Loaded ' + blocks.length + ' historical blocks');
 
