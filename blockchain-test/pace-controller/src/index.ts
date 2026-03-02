@@ -11,6 +11,7 @@ const state = new StateMachine(config);
 let lastKnownHeadBlockNum = 0;
 let lastChainInfo: ChainInfo | null = null;
 let isPaused = false;
+let producing = false; // true while main loop has intentionally resumed a producer
 let healthy = true;
 const startTime = Date.now();
 
@@ -100,8 +101,9 @@ async function healthCheck(): Promise<void> {
     healthy = true;
 
     // If producer restarted, it comes up "resumed" by default.
-    // Re-assert pause if we're in SLOW or MEDIUM mode.
-    if (state.pace !== Pace.FAST && !isPaused) {
+    // Re-assert pause if we're in SLOW or MEDIUM mode, but NOT while
+    // the main loop has intentionally resumed a producer to produce a block.
+    if (state.pace !== Pace.FAST && !isPaused && !producing) {
       try {
         await producer.pause();
         isPaused = true;
@@ -177,6 +179,7 @@ async function mainLoop(): Promise<void> {
     if (!isPaused) {
       await ensurePaused();
     }
+    producing = true;
     await producer.resumeOne();
     isPaused = false;
 
@@ -196,6 +199,7 @@ async function mainLoop(): Promise<void> {
 
     // Step 4: Pause producer
     await ensurePaused();
+    producing = false;
 
     // Step 5: Interruptible sleep
     const sleepResult = await state.interruptibleSleep(intervalMs);
