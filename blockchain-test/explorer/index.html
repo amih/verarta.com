@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verarta Test Chain Explorer</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.xkcd@1/dist/chart.xkcd.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+a { color: #58a6ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.header {
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.header h1 {
+  font-size: 16px;
+  color: #f0f6fc;
+  white-space: nowrap;
+}
+.header-info {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.header-info span { color: #8b949e; }
+.header-info .value { color: #58a6ff; }
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 20px;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.pace-panel {
+  grid-column: 1 / -1;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.pace-label { color: #8b949e; font-size: 12px; }
+.pace-value { font-weight: bold; font-size: 14px; }
+.pace-slow { color: #f0883e; }
+.pace-medium { color: #3fb950; }
+.pace-fast { color: #f85149; }
+
+.panel {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.panel-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid #30363d;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0f6fc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.panel-body {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.feed-item {
+  padding: 6px 16px;
+  border-bottom: 1px solid #21262d;
+  font-size: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+.feed-item:last-child { border-bottom: none; }
+.feed-item:hover { background: #1c2128; }
+
+.block-num { color: #58a6ff; min-width: 70px; }
+.producer { min-width: 90px; font-weight: 600; }
+.timestamp { color: #8b949e; min-width: 80px; }
+.tx-count { color: #8b949e; }
+
+.producer-1 { color: #f97583; }
+.producer-2 { color: #79c0ff; }
+.producer-3 { color: #56d364; }
+.producer-4 { color: #d2a8ff; }
+
+.action-contract { color: #d2a8ff; min-width: 180px; }
+.action-auth { color: #8b949e; min-width: 120px; }
+
+.action-bar {
+  grid-column: 1 / -1;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+button {
+  background: #238636;
+  color: #fff;
+  border: 1px solid #2ea043;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover { background: #2ea043; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.tx-result {
+  font-size: 12px;
+  max-width: 600px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tx-success { color: #3fb950; }
+.tx-error { color: #f85149; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-connected { background: #0d4429; color: #3fb950; }
+.badge-disconnected { background: #490202; color: #f85149; }
+.badge-connecting { background: #1c2128; color: #8b949e; }
+
+.chart-container { padding: 8px 16px 16px; }
+.chart-container svg { width: 100%; }
+
+.empty-state {
+  padding: 24px 16px;
+  text-align: center;
+  color: #484f58;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .panels { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Verarta Test Chain</h1>
+  <div class="header-info">
+    <span>Head: <span class="value" id="head-block">-</span></span>
+    <span>LIB: <span class="value" id="lib-block">-</span></span>
+    <span>Version: <span class="value" id="server-version">-</span></span>
+    <span>Chain: <span class="value" id="chain-id">-</span></span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="panels">
+
+    <div class="pace-panel">
+      <div>
+        <span class="pace-label">Pace Mode</span><br>
+        <span class="pace-value" id="pace-mode">-</span>
+      </div>
+      <div>
+        <span class="pace-label">Paused</span><br>
+        <span class="pace-value" id="pace-paused">-</span>
+      </div>
+      <div>
+        <span class="pace-label">Uptime</span><br>
+        <span class="pace-value" id="pace-uptime">-</span>
+      </div>
+      <div>
+        <span class="pace-label">Pace Controller</span><br>
+        <span class="badge badge-connecting" id="pace-status">connecting</span>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button id="send-transfer">Send 1.0000 TST (testuser1 &rarr; testuser2)</button>
+      <span class="tx-result" id="tx-result"></span>
+    </div>
+
+    <div class="panel chart-panel">
+      <div class="panel-header">Blocks / min (last 2h)</div>
+      <div class="chart-container"><svg id="blocks-chart"></svg></div>
+    </div>
+    <div class="panel chart-panel">
+      <div class="panel-header">Actions / min (last 2h)</div>
+      <div class="chart-container"><svg id="actions-chart"></svg></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span>Live Blocks</span>
+        <span class="badge badge-connecting" id="block-feed-status">connecting</span>
+      </div>
+      <div class="panel-body" id="block-feed">
+        <div class="empty-state">Waiting for blocks...</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span>Live Actions</span>
+        <span class="badge badge-connecting" id="action-feed-status">connecting</span>
+      </div>
+      <div class="panel-body" id="action-feed">
+        <div class="empty-state">Waiting for actions...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── Configuration ───
+var CHAIN_API = 'https://test-chain.verarta.com';
+var HYPERION_API = 'https://test-hyperion.verarta.com';
+var PACE_API = 'https://test-pace.verarta.com';
+var PACE_WS = 'wss://test-pace.verarta.com';
+var TESTUSER1_PRIVATE_KEY = '5JbQvsv6H7WcYUaYkPg7wF1uzEGC1fK9jJS8iohLcxCeEMmGEQh';
+var MAX_FEED_ITEMS = 50;
+
+var PRODUCER_COLORS = {
+  producer1: 'producer-1', producer2: 'producer-2',
+  producer3: 'producer-3', producer4: 'producer-4',
+};
+
+// ─── State ───
+var lastHeadBlockNum = 0;
+var blockFeedItems = [];
+var actionFeedItems = [];
+var blockTimestamps = [];
+var actionTimestamps = [];
+var CHART_MINUTES = 120;
+
+// ─── DOM ───
+var $headBlock = document.getElementById('head-block');
+var $libBlock = document.getElementById('lib-block');
+var $serverVersion = document.getElementById('server-version');
+var $chainId = document.getElementById('chain-id');
+var $paceMode = document.getElementById('pace-mode');
+var $pacePaused = document.getElementById('pace-paused');
+var $paceUptime = document.getElementById('pace-uptime');
+var $paceStatus = document.getElementById('pace-status');
+var $blockFeed = document.getElementById('block-feed');
+var $blockFeedStatus = document.getElementById('block-feed-status');
+var $actionFeed = document.getElementById('action-feed');
+var $actionFeedStatus = document.getElementById('action-feed-status');
+var $txResult = document.getElementById('tx-result');
+var $sendBtn = document.getElementById('send-transfer');
+
+// ─── Utilities ───
+function formatTime(isoString) {
+  try {
+    var d = new Date(isoString.endsWith('Z') ? isoString : isoString + 'Z');
+    return d.toLocaleTimeString();
+  } catch(e) { return isoString; }
+}
+
+function formatUptime(seconds) {
+  var h = Math.floor(seconds / 3600);
+  var m = Math.floor((seconds % 3600) / 60);
+  var s = seconds % 60;
+  if (h > 0) return h + 'h ' + m + 'm';
+  if (m > 0) return m + 'm ' + s + 's';
+  return s + 's';
+}
+
+function esc(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function notifyActivity() {
+  fetch(PACE_API + '/activity', { method: 'POST' }).catch(function(){});
+}
+
+// ─── Block Feed ───
+function renderBlockFeed() {
+  if (blockFeedItems.length === 0) {
+    $blockFeed.innerHTML = '<div class="empty-state">Waiting for blocks...</div>';
+    return;
+  }
+  $blockFeed.innerHTML = blockFeedItems.map(function(b) {
+    var cc = PRODUCER_COLORS[b.producer] || '';
+    return '<div class="feed-item">' +
+      '<span class="block-num">#' + b.block_num + '</span>' +
+      '<span class="producer ' + cc + '">' + esc(b.producer) + '</span>' +
+      '<span class="timestamp">' + formatTime(b.timestamp) + '</span>' +
+      '<span class="tx-count">' + b.tx_count + ' tx</span>' +
+    '</div>';
+  }).join('');
+}
+
+function addBlock(block_num, producer, timestamp, tx_count) {
+  if (blockFeedItems.some(function(b) { return b.block_num === block_num; })) return;
+  blockFeedItems.unshift({ block_num: block_num, producer: producer, timestamp: timestamp, tx_count: tx_count });
+  blockFeedItems.sort(function(a, b) { return b.block_num - a.block_num; });
+  while (blockFeedItems.length > MAX_FEED_ITEMS) blockFeedItems.pop();
+  renderBlockFeed();
+  blockTimestamps.push(Date.now());
+  scheduleChartRender();
+}
+
+function fetchBlock(blockNum) {
+  return fetch(CHAIN_API + '/v1/chain/get_block', {
+    method: 'POST',
+    body: JSON.stringify({ block_num_or_id: blockNum }),
+  }).then(function(res) { return res.ok ? res.json() : null; })
+    .catch(function() { return null; });
+}
+
+// ─── Pace Status Update ───
+function updatePaceUI(data) {
+  var pace = (data.pace || 'unknown').toUpperCase();
+  $paceMode.textContent = pace;
+  $paceMode.className = 'pace-value pace-' + (data.pace || '');
+  $pacePaused.textContent = data.paused ? 'Yes' : 'No';
+  $paceUptime.textContent = formatUptime(data.uptime || 0);
+}
+
+// ─── Chain Info Update ───
+function updateChainUI(chain) {
+  $headBlock.textContent = chain.head_block_num;
+  $libBlock.textContent = chain.last_irreversible_block_num || '-';
+  $serverVersion.textContent = chain.server_version_string || '-';
+  $chainId.textContent = (chain.chain_id || '').substring(0, 16) + '...';
+}
+
+// ─── Action Feed ───
+function renderActionFeed() {
+  if (actionFeedItems.length === 0) {
+    $actionFeed.innerHTML = '<div class="empty-state">Waiting for actions...</div>';
+    return;
+  }
+  $actionFeed.innerHTML = actionFeedItems.map(function(a) {
+    return '<div class="feed-item">' +
+      '<span class="action-contract">' + esc(a.contract) + '::' + esc(a.action) + '</span>' +
+      '<span class="action-auth">' + esc(a.auth) + '</span>' +
+      '<span class="block-num">#' + a.block_num + '</span>' +
+      '<span class="timestamp">' + formatTime(a.timestamp) + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function addAction(contract, action, auth, block_num, timestamp) {
+  actionFeedItems.unshift({ contract: contract, action: action, auth: auth, block_num: block_num, timestamp: timestamp });
+  while (actionFeedItems.length > MAX_FEED_ITEMS) actionFeedItems.pop();
+  renderActionFeed();
+  actionTimestamps.push(Date.now());
+  scheduleChartRender();
+}
+
+// ─── Pace Controller WebSocket (chain info + pace status + blocks) ───
+function connectPaceWS() {
+  var ws = new WebSocket(PACE_WS);
+
+  ws.onopen = function() {
+    console.log('[pace-ws] Connected');
+    $paceStatus.textContent = 'connected';
+    $paceStatus.className = 'badge badge-connected';
+    $blockFeedStatus.textContent = 'live';
+    $blockFeedStatus.className = 'badge badge-connected';
+  };
+
+  ws.onmessage = function(event) {
+    try {
+      var msg = JSON.parse(event.data);
+
+      if (msg.type === 'block') {
+        var chain = msg.data.chain;
+        var pace = msg.data.pace;
+        updateChainUI(chain);
+        updatePaceUI(pace);
+
+        // Fetch the actual block to get tx count + details
+        var blockNum = chain.head_block_num;
+        if (blockNum > lastHeadBlockNum) {
+          // Fetch blocks we missed
+          var start = Math.max(lastHeadBlockNum + 1, blockNum - 9);
+          lastHeadBlockNum = blockNum;
+          for (var i = start; i <= blockNum; i++) {
+            (function(bn) {
+              fetchBlock(bn).then(function(block) {
+                if (block) addBlock(block.block_num, block.producer, block.timestamp, (block.transactions || []).length);
+              });
+            })(i);
+          }
+        }
+      } else if (msg.type === 'pace') {
+        updatePaceUI(msg.data);
+      }
+    } catch(e) {
+      console.warn('[pace-ws] Parse error:', e);
+    }
+  };
+
+  ws.onclose = function() {
+    console.log('[pace-ws] Disconnected, reconnecting in 3s...');
+    $paceStatus.textContent = 'disconnected';
+    $paceStatus.className = 'badge badge-disconnected';
+    $blockFeedStatus.textContent = 'disconnected';
+    $blockFeedStatus.className = 'badge badge-disconnected';
+    setTimeout(connectPaceWS, 3000);
+  };
+
+  ws.onerror = function() {
+    // onclose will fire after this
+  };
+}
+
+// ─── Hyperion Socket.IO Streaming (actions) ───
+function connectStreaming() {
+  var socket = io(HYPERION_API, {
+    transports: ['websocket'],
+    path: '/stream',
+  });
+
+  socket.on('connect', function() {
+    console.log('[stream] Connected to Hyperion');
+    $actionFeedStatus.textContent = 'live';
+    $actionFeedStatus.className = 'badge badge-connected';
+
+    socket.emit('streamActions', {
+      contract: '*',
+      action: '*',
+      account: '',
+      start_from: 0,
+      read_until: 0,
+      filters: [],
+    });
+  });
+
+  socket.on('action', function(data) {
+    var act = data.act || {};
+    if (act.name === 'onblock' && act.account === 'eosio') return;
+
+    var auth = (act.authorization || []).map(function(a) {
+      return a.actor + '@' + a.permission;
+    }).join(', ') || '-';
+
+    addAction(
+      act.account || '?',
+      act.name || '?',
+      auth,
+      data.block_num || '?',
+      data['@timestamp'] || data.timestamp || ''
+    );
+
+    if (data.block_num && data.block_num > lastHeadBlockNum) {
+      lastHeadBlockNum = data.block_num;
+      fetchBlock(data.block_num).then(function(block) {
+        if (block) addBlock(block.block_num, block.producer, block.timestamp, (block.transactions || []).length);
+      });
+    }
+  });
+
+  socket.on('disconnect', function() {
+    console.log('[stream] Disconnected');
+    $actionFeedStatus.textContent = 'disconnected';
+    $actionFeedStatus.className = 'badge badge-disconnected';
+  });
+
+  socket.on('connect_error', function(err) {
+    console.warn('[stream] Error:', err.message);
+    $actionFeedStatus.textContent = 'error';
+    $actionFeedStatus.className = 'badge badge-disconnected';
+  });
+}
+
+// ─── Send Transfer ───
+function sendTransfer() {
+  $sendBtn.disabled = true;
+  $txResult.textContent = 'Waking chain...';
+  $txResult.className = 'tx-result';
+
+  notifyActivity();
+  setTimeout(function() {
+    notifyActivity();
+    $txResult.textContent = 'Loading eosjs...';
+
+    Promise.all([
+      import('https://esm.sh/eosjs@22.1.0'),
+      import('https://esm.sh/eosjs@22.1.0/dist/eosjs-jssig'),
+    ]).then(function(modules) {
+      var Api = modules[0].Api;
+      var JsonRpc = modules[0].JsonRpc;
+      var JsSignatureProvider = modules[1].JsSignatureProvider;
+
+      $txResult.textContent = 'Signing & sending...';
+
+      var rpc = new JsonRpc(CHAIN_API);
+      var signatureProvider = new JsSignatureProvider([TESTUSER1_PRIVATE_KEY]);
+      var api = new Api({ rpc: rpc, signatureProvider: signatureProvider });
+
+      return api.transact({
+        actions: [{
+          account: 'eosio.token',
+          name: 'transfer',
+          authorization: [{ actor: 'testuser1', permission: 'active' }],
+          data: {
+            from: 'testuser1',
+            to: 'testuser2',
+            quantity: '1.0000 TST',
+            memo: 'explorer test ' + Date.now(),
+          },
+        }],
+      }, {
+        blocksBehind: 3,
+        expireSeconds: 120,
+      });
+    }).then(function(result) {
+      var txId = result.transaction_id || (result.processed && result.processed.id) || 'unknown';
+      $txResult.textContent = 'TX: ' + txId;
+      $txResult.className = 'tx-result tx-success';
+      notifyActivity();
+    }).catch(function(err) {
+      var msg = (err && err.message) || String(err);
+      $txResult.textContent = 'Error: ' + msg.substring(0, 200);
+      $txResult.className = 'tx-result tx-error';
+      console.error('Transfer error:', err);
+    }).finally(function() {
+      $sendBtn.disabled = false;
+    });
+  }, 2000);
+}
+
+$sendBtn.addEventListener('click', sendTransfer);
+
+// ─── Charts ───
+function computeMinuteBuckets(timestamps, minuteCount) {
+  var now = Date.now();
+  var cutoff = now - minuteCount * 60000;
+  // prune old timestamps
+  while (timestamps.length > 0 && timestamps[0] < cutoff) timestamps.shift();
+
+  var labels = [];
+  var data = [];
+  for (var i = 0; i < minuteCount; i++) {
+    var bucketStart = cutoff + i * 60000;
+    var bucketEnd = bucketStart + 60000;
+    var count = 0;
+    for (var j = 0; j < timestamps.length; j++) {
+      if (timestamps[j] >= bucketStart && timestamps[j] < bucketEnd) count++;
+    }
+    var d = new Date(bucketStart);
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mm = String(d.getMinutes()).padStart(2, '0');
+    labels.push(hh + ':' + mm);
+    data.push(count);
+  }
+  return { labels: labels, data: data };
+}
+
+function renderChart(svgId, title, buckets, color) {
+  var container = document.getElementById(svgId).parentNode;
+  container.innerHTML = '<svg id="' + svgId + '"></svg>';
+  var svg = document.getElementById(svgId);
+  new chartXkcd.Line(svg, {
+    title: '',
+    xLabel: '',
+    yLabel: '',
+    data: {
+      labels: buckets.labels,
+      datasets: [{ label: title, data: buckets.data }],
+    },
+    options: {
+      backgroundColor: '#161b22',
+      strokeColor: '#30363d',
+      dataColors: [color],
+      xTickCount: 6,
+      yTickCount: 4,
+      showLegend: false,
+      unxkcdify: false,
+    },
+  });
+}
+
+function renderAllCharts() {
+  var blockBuckets = computeMinuteBuckets(blockTimestamps, CHART_MINUTES);
+  var actionBuckets = computeMinuteBuckets(actionTimestamps, CHART_MINUTES);
+  renderChart('blocks-chart', 'Blocks/min', blockBuckets, '#58a6ff');
+  renderChart('actions-chart', 'Actions/min', actionBuckets, '#3fb950');
+}
+
+var chartRenderTimer = null;
+function scheduleChartRender() {
+  clearTimeout(chartRenderTimer);
+  chartRenderTimer = setTimeout(renderAllCharts, 2000);
+}
+
+// ─── Init ───
+connectPaceWS();
+connectStreaming();
+renderAllCharts();
+setInterval(renderAllCharts, 30000);
+</script>
+</body>
+</html>
