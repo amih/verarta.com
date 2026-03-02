@@ -507,60 +507,81 @@ function connectStreaming() {
 }
 
 // ─── Send Transfer ───
+function waitForFreshBlock(startBlockNum, maxWaitMs) {
+  var deadline = Date.now() + maxWaitMs;
+  return new Promise(function(resolve, reject) {
+    function poll() {
+      if (Date.now() > deadline) return reject(new Error('Chain did not produce a new block within ' + (maxWaitMs / 1000) + 's'));
+      fetch(CHAIN_API + '/v1/chain/get_info', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(info) {
+          if (info.head_block_num > startBlockNum) return resolve(info);
+          setTimeout(poll, 500);
+        })
+        .catch(function() { setTimeout(poll, 500); });
+    }
+    poll();
+  });
+}
+
 function sendTransfer() {
   $sendBtn.disabled = true;
   $txResult.textContent = 'Waking chain...';
   $txResult.className = 'tx-result';
 
+  var startBlock = lastHeadBlockNum;
   notifyActivity();
-  setTimeout(function() {
-    notifyActivity();
+
+  // Wait for chain to actually produce a fresh block before submitting
+  waitForFreshBlock(startBlock, 15000).then(function(info) {
+    lastHeadBlockNum = info.head_block_num;
+    updateChainUI(info);
     $txResult.textContent = 'Loading eosjs...';
 
-    Promise.all([
+    return Promise.all([
       import('https://esm.sh/eosjs@22.1.0'),
       import('https://esm.sh/eosjs@22.1.0/dist/eosjs-jssig'),
-    ]).then(function(modules) {
-      var Api = modules[0].Api;
-      var JsonRpc = modules[0].JsonRpc;
-      var JsSignatureProvider = modules[1].JsSignatureProvider;
+    ]);
+  }).then(function(modules) {
+    var Api = modules[0].Api;
+    var JsonRpc = modules[0].JsonRpc;
+    var JsSignatureProvider = modules[1].JsSignatureProvider;
 
-      $txResult.textContent = 'Signing & sending...';
+    $txResult.textContent = 'Signing & sending...';
 
-      var rpc = new JsonRpc(CHAIN_API);
-      var signatureProvider = new JsSignatureProvider([TESTUSER1_PRIVATE_KEY]);
-      var api = new Api({ rpc: rpc, signatureProvider: signatureProvider });
+    var rpc = new JsonRpc(CHAIN_API);
+    var signatureProvider = new JsSignatureProvider([TESTUSER1_PRIVATE_KEY]);
+    var api = new Api({ rpc: rpc, signatureProvider: signatureProvider });
 
-      return api.transact({
-        actions: [{
-          account: 'eosio.token',
-          name: 'transfer',
-          authorization: [{ actor: 'testuser1', permission: 'active' }],
-          data: {
-            from: 'testuser1',
-            to: 'testuser2',
-            quantity: '1.0000 TST',
-            memo: 'explorer test ' + Date.now(),
-          },
-        }],
-      }, {
-        blocksBehind: 3,
-        expireSeconds: 120,
-      });
-    }).then(function(result) {
-      var txId = result.transaction_id || (result.processed && result.processed.id) || 'unknown';
-      $txResult.textContent = 'TX: ' + txId;
-      $txResult.className = 'tx-result tx-success';
-      notifyActivity();
-    }).catch(function(err) {
-      var msg = (err && err.message) || String(err);
-      $txResult.textContent = 'Error: ' + msg.substring(0, 200);
-      $txResult.className = 'tx-result tx-error';
-      console.error('Transfer error:', err);
-    }).finally(function() {
-      $sendBtn.disabled = false;
+    return api.transact({
+      actions: [{
+        account: 'eosio.token',
+        name: 'transfer',
+        authorization: [{ actor: 'testuser1', permission: 'active' }],
+        data: {
+          from: 'testuser1',
+          to: 'testuser2',
+          quantity: '1.0000 TST',
+          memo: 'explorer test ' + Date.now(),
+        },
+      }],
+    }, {
+      blocksBehind: 3,
+      expireSeconds: 120,
     });
-  }, 2000);
+  }).then(function(result) {
+    var txId = result.transaction_id || (result.processed && result.processed.id) || 'unknown';
+    $txResult.textContent = 'TX: ' + txId;
+    $txResult.className = 'tx-result tx-success';
+    notifyActivity();
+  }).catch(function(err) {
+    var msg = (err && err.message) || String(err);
+    $txResult.textContent = 'Error: ' + msg.substring(0, 200);
+    $txResult.className = 'tx-result tx-error';
+    console.error('Transfer error:', err);
+  }).finally(function() {
+    $sendBtn.disabled = false;
+  });
 }
 
 $sendBtn.addEventListener('click', sendTransfer);
@@ -594,7 +615,7 @@ function computeMinuteBuckets(timestamps, minuteCount) {
   return { labels: labels, data: data };
 }
 
-function renderChart(canvasId, title, buckets, color) {
+function renderChart(canvasId, title, buckets, color, yScale) {
   if (chartInstances[canvasId]) {
     chartInstances[canvasId].data.labels = buckets.labels;
     chartInstances[canvasId].data.datasets[0].data = buckets.data;
@@ -631,7 +652,7 @@ function renderChart(canvasId, title, buckets, color) {
           },
           grid: { color: '#21262d' },
         },
-        y: {
+        y: yScale || {
           beginAtZero: true,
           ticks: { color: '#9eaab6' },
           grid: { color: '#21262d' },
@@ -641,10 +662,24 @@ function renderChart(canvasId, title, buckets, color) {
   });
 }
 
+var blocksYScale = {
+  type: 'logarithmic',
+  min: 1,
+  max: 600,
+  ticks: {
+    color: '#9eaab6',
+    callback: function(value) {
+      if ([1, 2, 5, 10, 20, 50, 100, 200, 600].indexOf(value) !== -1) return value;
+      return '';
+    },
+  },
+  grid: { color: '#21262d' },
+};
+
 function renderAllCharts() {
   var blockBuckets = computeMinuteBuckets(blockTimestamps, CHART_MINUTES);
   var actionBuckets = computeMinuteBuckets(actionTimestamps, CHART_MINUTES);
-  renderChart('blocks-chart', 'Blocks / 5 min', blockBuckets, '#58a6ff');
+  renderChart('blocks-chart', 'Blocks / 5 min', blockBuckets, '#58a6ff', blocksYScale);
   renderChart('actions-chart', 'Actions / 5 min', actionBuckets, '#3fb950');
 }
 
@@ -677,14 +712,16 @@ async function loadHistoricalData() {
     (actionsData.actions || []).forEach(function(a) {
       var act = a.act || {};
       if (act.name === 'onblock' && act.account === 'eosio') return;
-      actionTimestamps.push(new Date(a['@timestamp']).getTime());
+      var ts = a['@timestamp'];
+      actionTimestamps.push(new Date(ts.endsWith('Z') ? ts : ts + 'Z').getTime());
     });
     console.log('[init] Loaded ' + actionTimestamps.length + ' historical actions');
 
     // Populate block timestamps + feed from Hyperion blocks
     var blocks = blocksData.blocks || [];
     blocks.forEach(function(b) {
-      blockTimestamps.push(new Date(b['@timestamp']).getTime());
+      var ts = b['@timestamp'];
+      blockTimestamps.push(new Date(ts.endsWith('Z') ? ts : ts + 'Z').getTime());
     });
     console.log('[init] Loaded ' + blocks.length + ' historical blocks');
 
