@@ -10,7 +10,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   background: #0d1117;
-  color: #c9d1d9;
+  color: #e6edf3;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 13px;
   line-height: 1.5;
@@ -38,7 +38,7 @@ a:hover { text-decoration: underline; }
   flex-wrap: wrap;
   font-size: 12px;
 }
-.header-info span { color: #8b949e; }
+.header-info span { color: #9eaab6; }
 .header-info .value { color: #58a6ff; }
 
 .container {
@@ -65,7 +65,7 @@ a:hover { text-decoration: underline; }
   gap: 20px;
   flex-wrap: wrap;
 }
-.pace-label { color: #8b949e; font-size: 12px; }
+.pace-label { color: #9eaab6; font-size: 12px; }
 .pace-value { font-weight: bold; font-size: 14px; }
 .pace-slow { color: #f0883e; }
 .pace-medium { color: #3fb950; }
@@ -105,8 +105,8 @@ a:hover { text-decoration: underline; }
 
 .block-num { color: #58a6ff; min-width: 70px; }
 .producer { min-width: 90px; font-weight: 600; }
-.timestamp { color: #8b949e; min-width: 80px; }
-.tx-count { color: #8b949e; }
+.timestamp { color: #9eaab6; min-width: 80px; }
+.tx-count { color: #9eaab6; }
 
 .producer-1 { color: #f97583; }
 .producer-2 { color: #79c0ff; }
@@ -114,7 +114,7 @@ a:hover { text-decoration: underline; }
 .producer-4 { color: #d2a8ff; }
 
 .action-contract { color: #d2a8ff; min-width: 180px; }
-.action-auth { color: #8b949e; min-width: 120px; }
+.action-auth { color: #9eaab6; min-width: 120px; }
 
 .action-bar {
   grid-column: 1 / -1;
@@ -160,7 +160,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .badge-connected { background: #0d4429; color: #3fb950; }
 .badge-disconnected { background: #490202; color: #f85149; }
-.badge-connecting { background: #1c2128; color: #8b949e; }
+.badge-connecting { background: #1c2128; color: #9eaab6; }
 
 .chart-container { padding: 8px 16px 16px; }
 .chart-container svg { width: 100%; }
@@ -586,6 +586,11 @@ function computeMinuteBuckets(timestamps, minuteCount) {
     var mm = String(d.getMinutes()).padStart(2, '0');
     labels.push(hh + ':' + mm);
     data.push(count);
+  }
+  // Show label only every 15 minutes to prevent overlap
+  for (var i = 0; i < labels.length; i++) {
+    var minuteOfHour = (new Date(cutoff + i * 60000)).getMinutes();
+    if (minuteOfHour % 15 !== 0) labels[i] = '';
   }
   return { labels: labels, data: data };
 }
