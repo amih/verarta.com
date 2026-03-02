@@ -610,7 +610,7 @@ function computeMinuteBuckets(timestamps, minuteCount) {
     var hh = String(d.getHours()).padStart(2, '0');
     var mm = String(d.getMinutes()).padStart(2, '0');
     labels.push(hh + ':' + mm);
-    data.push(count);
+    data.push(Math.round(count / BUCKET_MINUTES * 10) / 10);
   }
   return { labels: labels, data: data };
 }
@@ -665,11 +665,11 @@ function renderChart(canvasId, title, buckets, color, yScale) {
 var blocksYScale = {
   type: 'logarithmic',
   min: 1,
-  max: 600,
+  max: 120,
   ticks: {
     color: '#9eaab6',
     callback: function(value) {
-      if ([1, 2, 5, 10, 20, 50, 100, 200, 600].indexOf(value) !== -1) return value;
+      if ([1, 2, 5, 10, 20, 50, 120].indexOf(value) !== -1) return value;
       return '';
     },
   },
