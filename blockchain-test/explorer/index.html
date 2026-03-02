@@ -556,6 +556,8 @@ function sendTransfer() {
 
       $txResult.textContent = 'Signing & sending...';
       notifyActivity();
+      // Keep chain active while tx is in flight
+      var keepAlive = setInterval(notifyActivity, 2000);
 
       var rpc = new JsonRpc(CHAIN_API);
       var signatureProvider = new JsSignatureProvider([TESTUSER1_PRIVATE_KEY]);
@@ -574,9 +576,9 @@ function sendTransfer() {
           },
         }],
       }, {
-        blocksBehind: 3,
-        expireSeconds: 120,
-      });
+        blocksBehind: 0,
+        expireSeconds: 600,
+      }).finally(function() { clearInterval(keepAlive); });
     }).then(function(result) {
       var txId = result.transaction_id || (result.processed && result.processed.id) || 'unknown';
       $txResult.textContent = 'TX: ' + txId;
