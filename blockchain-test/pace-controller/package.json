@@ -1,0 +1,19 @@
+{
+  "name": "pace-controller",
+  "version": "1.0.0",
+  "description": "Variable rate block production controller for Verarta test chain",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch & node --watch dist/index.js"
+  },
+  "dependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.0"
+  }
+}
