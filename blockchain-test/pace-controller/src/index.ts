@@ -174,6 +174,7 @@ async function mainLoop(): Promise<void> {
       state.pace === Pace.MEDIUM
         ? config.mediumIntervalMs
         : config.slowIntervalMs;
+    const cycleStart = Date.now();
 
     // Step 1: Resume a single producer (round-robin rotation)
     if (!isPaused) {
@@ -183,10 +184,11 @@ async function mainLoop(): Promise<void> {
     await producer.resumeOne();
     isPaused = false;
 
-    // Step 2: Wait for a new block
+    // Step 2: Wait for a new block (use most of the interval budget)
+    const waitBudget = Math.max(intervalMs - 1000, config.blockWaitTimeoutMs);
     const newBlockNum = await producer.waitForNewBlock(
       lastKnownHeadBlockNum,
-      config.blockWaitTimeoutMs
+      waitBudget
     );
 
     // Step 3: Fetch full info and broadcast
@@ -201,8 +203,12 @@ async function mainLoop(): Promise<void> {
     await ensurePaused();
     producing = false;
 
-    // Step 5: Interruptible sleep
-    const sleepResult = await state.interruptibleSleep(intervalMs);
+    // Step 5: Interruptible sleep for remaining interval time
+    const elapsed = Date.now() - cycleStart;
+    const remainingMs = Math.max(intervalMs - elapsed, 0);
+    const sleepResult = remainingMs > 0
+      ? await state.interruptibleSleep(remainingMs)
+      : await state.interruptibleSleep(100) as "timeout";
 
     // Step 6: Check pace transitions
     const prevPace = state.pace;
