@@ -164,6 +164,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .chart-container { padding: 8px 16px 16px; }
 .chart-container svg { width: 100%; }
+.chart-container svg text { fill: #9eaab6 !important; }
 
 .empty-state {
   padding: 24px 16px;
@@ -566,17 +567,20 @@ function sendTransfer() {
 $sendBtn.addEventListener('click', sendTransfer);
 
 // ─── Charts ───
+var BUCKET_MINUTES = 5;
+
 function computeMinuteBuckets(timestamps, minuteCount) {
   var now = Date.now();
   var cutoff = now - minuteCount * 60000;
   // prune old timestamps
   while (timestamps.length > 0 && timestamps[0] < cutoff) timestamps.shift();
 
+  var bucketCount = Math.ceil(minuteCount / BUCKET_MINUTES);
   var labels = [];
   var data = [];
-  for (var i = 0; i < minuteCount; i++) {
-    var bucketStart = cutoff + i * 60000;
-    var bucketEnd = bucketStart + 60000;
+  for (var i = 0; i < bucketCount; i++) {
+    var bucketStart = cutoff + i * BUCKET_MINUTES * 60000;
+    var bucketEnd = bucketStart + BUCKET_MINUTES * 60000;
     var count = 0;
     for (var j = 0; j < timestamps.length; j++) {
       if (timestamps[j] >= bucketStart && timestamps[j] < bucketEnd) count++;
@@ -584,13 +588,13 @@ function computeMinuteBuckets(timestamps, minuteCount) {
     var d = new Date(bucketStart);
     var hh = String(d.getHours()).padStart(2, '0');
     var mm = String(d.getMinutes()).padStart(2, '0');
-    labels.push(hh + ':' + mm);
+    // Show label every 15 minutes to prevent overlap
+    if (d.getMinutes() % 15 === 0) {
+      labels.push(hh + ':' + mm);
+    } else {
+      labels.push('');
+    }
     data.push(count);
-  }
-  // Show label only every 15 minutes to prevent overlap
-  for (var i = 0; i < labels.length; i++) {
-    var minuteOfHour = (new Date(cutoff + i * 60000)).getMinutes();
-    if (minuteOfHour % 15 !== 0) labels[i] = '';
   }
   return { labels: labels, data: data };
 }
