@@ -4,6 +4,7 @@ import { query } from '../../../lib/db.js';
 import { getAndDelete } from '../../../lib/redis.js';
 import { createSession } from '../../../lib/auth.js';
 import { createBlockchainAccount } from '../../../lib/antelope.js';
+import { generateUsername } from '../../../lib/accountName.js';
 
 const CreateAccountSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -73,22 +74,27 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       });
     }
 
+    // Generate a unique username from display name
+    const username = await generateUsername(verifiedData.display_name);
+
     // Create user in database
     const result = await query(
       `INSERT INTO users (
         blockchain_account,
         email,
         display_name,
+        username,
         webauthn_credential_id,
         webauthn_public_key,
         email_verified,
         last_login
-      ) VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
       RETURNING id, blockchain_account, email, display_name, is_admin`,
       [
         verifiedData.blockchain_account,
         email,
         verifiedData.display_name,
+        username,
         webauthn_credential_id,
         webauthn_public_key,
       ]

@@ -3,7 +3,7 @@ import { query } from '../../../../../lib/db.js';
 import { getAndDelete } from '../../../../../lib/redis.js';
 import { createSession } from '../../../../../lib/auth.js';
 import { validateCallback, fetchUserProfile, type OAuthProvider } from '../../../../../lib/oauth.js';
-import { generateAccountName } from '../../../../../lib/accountName.js';
+import { generateAccountName, generateUsername } from '../../../../../lib/accountName.js';
 import { createBlockchainAccount } from '../../../../../lib/antelope.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -82,17 +82,19 @@ export const GET: APIRoute = async ({ url, redirect }) => {
       // New user: create account
       const accountName = generateAccountName('user');
       const displayName = profile.name || profile.email.split('@')[0];
+      const username = await generateUsername(displayName);
 
       const result = await query(
         `INSERT INTO users (
-          blockchain_account, email, display_name, email_verified,
+          blockchain_account, email, display_name, username, email_verified,
           oauth_provider, oauth_provider_id, avatar_url, last_login
-        ) VALUES ($1, $2, $3, TRUE, $4, $5, $6, NOW())
+        ) VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7, NOW())
         RETURNING id`,
         [
           accountName,
           profile.email,
           displayName,
+          username,
           provider,
           profile.providerId,
           profile.avatarUrl,
@@ -192,14 +194,15 @@ export const POST: APIRoute = async (context) => {
     } else {
       const accountName = generateAccountName('user');
       const displayName = profile.name || profile.email.split('@')[0];
+      const username = await generateUsername(displayName);
 
       const result = await query(
         `INSERT INTO users (
-          blockchain_account, email, display_name, email_verified,
+          blockchain_account, email, display_name, username, email_verified,
           oauth_provider, oauth_provider_id, avatar_url, last_login
-        ) VALUES ($1, $2, $3, TRUE, $4, $5, $6, NOW())
+        ) VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7, NOW())
         RETURNING id`,
-        [accountName, profile.email, displayName, provider, profile.providerId, profile.avatarUrl]
+        [accountName, profile.email, displayName, username, provider, profile.providerId, profile.avatarUrl]
       );
 
       userId = result.rows[0].id;
