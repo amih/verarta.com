@@ -8,6 +8,9 @@ const THUMB_HEIGHT = 300;
 
 export async function generateThumbnail(file: File): Promise<File | null> {
   try {
+    if (file.type.startsWith('image/')) {
+      return await generateImageThumbnail(file);
+    }
     if (file.type === 'application/pdf') {
       return await generatePdfThumbnail(file);
     }
@@ -42,6 +45,25 @@ export async function generatePublicThumbnail(file: File): Promise<string | null
     ctx.drawImage(img, 0, 0, width, height);
 
     return canvas.toDataURL('image/webp', 0.8);
+  } catch {
+    return null;
+  }
+}
+
+async function generateImageThumbnail(file: File): Promise<File | null> {
+  try {
+    const img = await createImageBitmap(file);
+    const scale = Math.min(1, THUMB_WIDTH / img.width, THUMB_HEIGHT / img.height);
+    const width = Math.round(img.width * scale);
+    const height = Math.round(img.height * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, width, height);
+
+    return await canvasToFile(canvas, `thumb_${file.name}.png`);
   } catch {
     return null;
   }
