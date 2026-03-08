@@ -97,9 +97,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binaries from builder
-COPY --from=builder /usr/local/bin/nodeos   /usr/local/bin/
-COPY --from=builder /usr/local/bin/cleos    /usr/local/bin/
-COPY --from=builder /usr/local/bin/keosd    /usr/local/bin/
+COPY --from=builder /usr/local/bin/nodeos      /usr/local/bin/
+COPY --from=builder /usr/local/bin/cleos       /usr/local/bin/
+COPY --from=builder /usr/local/bin/keosd       /usr/local/bin/
+COPY --from=builder /usr/local/bin/spring-util /usr/local/bin/
 
 # Create data directories
 RUN mkdir -p /data /config /wallet

@@ -13,7 +13,7 @@ export const GET: APIRoute = async (context) => {
   try {
     const result = await query(
       `SELECT ae.title, ae.description_html, ae.creation_date, ae.era, ae.artist_id, ae.collection_id,
-              ae.file_order, a.name AS artist_name, c.name AS collection_name
+              ae.file_order, ae.hidden, ae.thumbnail_url, a.name AS artist_name, c.name AS collection_name
        FROM artwork_extras ae
        LEFT JOIN artists a ON ae.artist_id = a.id
        LEFT JOIN collections c ON ae.collection_id = c.id

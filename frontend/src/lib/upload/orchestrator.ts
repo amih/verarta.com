@@ -5,7 +5,8 @@ import { fetchKeys } from '@/lib/api/auth';
 import { uploadStart } from '@/lib/api/artworks';
 import { uint8ToBase64 } from '@/lib/utils/chunking';
 import { useUploadStore } from '@/store/upload';
-import { generateThumbnail } from './thumbnail';
+import { generateThumbnail, generatePublicThumbnail } from './thumbnail';
+import { uploadPublicThumbnail } from '@/lib/api/profile';
 
 export interface AddFileOptions {
   artworkId: number;
@@ -185,6 +186,14 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
       });
     }).catch(() => { /* thumbnail failure is non-fatal */ });
 
+    // Generate unencrypted public thumbnail for image files (best-effort, non-blocking)
+    if (opts.file.type.startsWith('image/')) {
+      generatePublicThumbnail(opts.file).then(async (dataUrl) => {
+        if (!dataUrl) return;
+        await uploadPublicThumbnail(dataUrl, artworkId);
+      }).catch(() => { /* public thumbnail failure is non-fatal */ });
+    }
+
     return {
       artworkId,
       fileId,
@@ -306,6 +315,14 @@ export async function addFileToArtwork(opts: AddFileOptions): Promise<{ fileId: 
         file_data: uint8ToBase64(thumbEncrypted.ciphertext),
       });
     }).catch(() => { /* thumbnail failure is non-fatal */ });
+
+    // Generate unencrypted public thumbnail for image files (best-effort, non-blocking)
+    if (opts.file.type.startsWith('image/')) {
+      generatePublicThumbnail(opts.file).then(async (dataUrl) => {
+        if (!dataUrl) return;
+        await uploadPublicThumbnail(dataUrl, opts.artworkId);
+      }).catch(() => { /* public thumbnail failure is non-fatal */ });
+    }
 
     return { fileId };
   } catch (err) {

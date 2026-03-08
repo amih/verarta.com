@@ -73,6 +73,7 @@ export const GET: APIRoute = async (context) => {
       const artworkIds = rows.map((r: any) => r.artwork_id);
       const extrasResult = await query(
         `SELECT ae.blockchain_artwork_id, ae.creation_date, ae.era, ae.description_html,
+                ae.hidden, ae.thumbnail_url,
                 a.name AS artist_name, c.name AS collection_name
          FROM artwork_extras ae
          LEFT JOIN artists a ON ae.artist_id = a.id
@@ -124,6 +125,8 @@ export const GET: APIRoute = async (context) => {
           era: extras?.era ?? null,
           creation_date: extras?.creation_date ?? null,
           description_html: extras?.description_html ?? null,
+          hidden: extras?.hidden ?? false,
+          thumbnail_url: extras?.thumbnail_url ?? null,
         };
       })
     );

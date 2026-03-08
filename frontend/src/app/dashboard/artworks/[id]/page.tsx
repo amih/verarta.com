@@ -13,7 +13,14 @@ import {
   getArtworkHistory,
   deleteArtwork,
   deleteArtworkFile,
+  setArtworkVisibility,
 } from '@/lib/api/artworks';
+import { uploadPublicThumbnail } from '@/lib/api/profile';
+import { downloadFileRaw } from '@/lib/api/artworks';
+import { queryTable } from '@/lib/api/chain';
+import { decryptFile } from '@/lib/crypto/encryption';
+import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
+import { fetchKeys } from '@/lib/api/auth';
 import { fetchArtists, createArtist, type Artist } from '@/lib/api/artists';
 import { fetchCollections, createCollection, type Collection } from '@/lib/api/collections';
 import { fetchAdminKeys } from '@/lib/api/admin';
@@ -25,6 +32,8 @@ import { useAuthStore } from '@/store/auth';
 import { ALLOWED_MIME_TYPES } from '@/types/artwork';
 import {
   ArrowRightLeft,
+  Eye,
+  EyeOff,
   FileIcon,
   GripVertical,
   Loader2,
@@ -158,6 +167,10 @@ export default function ArtworkDetailPage() {
   // File delete state
   const [deletingFileId, setDeletingFileId] = useState<number | null>(null);
   const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<number | null>(null);
+
+  // Visibility state
+  const [visibilityLoading, setVisibilityLoading] = useState(false);
+  const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
 
   // Add file state
   const [addFileMode, setAddFileMode] = useState(false);
@@ -487,6 +500,33 @@ export default function ArtworkDetailPage() {
           {isOwner && (
             <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
               <button
+                onClick={async () => {
+                  setVisibilityLoading(true);
+                  try {
+                    const currentHidden = extras?.hidden ?? false;
+                    await setArtworkVisibility(id, !currentHidden);
+                    await queryClient.invalidateQueries({ queryKey: ['artwork-extras', id] });
+                  } catch { /* ignore */ }
+                  setVisibilityLoading(false);
+                }}
+                disabled={visibilityLoading}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  extras?.hidden === false || extras?.hidden === null
+                    ? 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/30'
+                    : 'border-zinc-300 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                }`}
+                title={extras?.hidden ? 'Make public' : 'Make private'}
+              >
+                {visibilityLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : extras?.hidden ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+                {extras?.hidden ? 'Private' : 'Public'}
+              </button>
+              <button
                 onClick={editMode ? () => setEditMode(false) : enterEditMode}
                 className="flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
@@ -547,6 +587,80 @@ export default function ArtworkDetailPage() {
             className="mt-4 prose prose-sm dark:prose-invert max-w-none text-zinc-600 dark:text-zinc-400"
             dangerouslySetInnerHTML={{ __html: extras.description_html }}
           />
+        )}
+
+        {/* Public thumbnail section */}
+        {!editMode && isOwner && !extras?.hidden && (
+          <div className="mt-4 flex items-center gap-3">
+            {extras?.thumbnail_url ? (
+              <>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Public thumbnail:</p>
+                <img
+                  src={`${process.env.NEXT_PUBLIC_API_URL || ''}${extras.thumbnail_url}`}
+                  alt="Public thumbnail"
+                  className="h-16 w-24 rounded border border-zinc-200 object-cover dark:border-zinc-700"
+                />
+              </>
+            ) : (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">No public thumbnail</p>
+            )}
+            <button
+              type="button"
+              disabled={thumbnailGenerating}
+              onClick={async () => {
+                // Find the first image file in the artwork
+                const imageFile = displayedFiles.find(
+                  (f) => f.upload_complete && !f.is_thumbnail && f.mime_type.startsWith('image/')
+                );
+                if (!imageFile || !user) return;
+                setThumbnailGenerating(true);
+                try {
+                  // Fetch on-chain metadata for the file
+                  const tableResult = await queryTable<{ file_id: number; encrypted_dek: string; iv: string; auth_tag: string }>({
+                    code: 'verarta.core', scope: 'verarta.core', table: 'artfiles',
+                    key_type: 'i64', lower_bound: String(imageFile.id), limit: 1,
+                  });
+                  const meta = tableResult.rows.find((r) => r.file_id === imageFile.id);
+                  if (!meta) throw new Error('File metadata not found on chain');
+
+                  // Get encryption keys
+                  let keyPair = await getKeyPair(user.email);
+                  if (!keyPair) {
+                    const serverKeys = await fetchKeys();
+                    if (serverKeys) { await importEncryptedKeyData(user.email, serverKeys); keyPair = await getKeyPair(user.email); }
+                  }
+                  if (!keyPair) throw new Error('Encryption keys not found');
+
+                  // Download and decrypt
+                  const encryptedBytes = await downloadFileRaw(imageFile.id);
+                  const decrypted = await decryptFile(
+                    new Uint8Array(encryptedBytes), meta.iv, meta.encrypted_dek, meta.auth_tag, keyPair.privateKey
+                  );
+
+                  // Create image from decrypted data and resize on canvas
+                  const blob = new Blob([decrypted], { type: imageFile.mime_type });
+                  const img = await createImageBitmap(blob);
+                  const scale = Math.min(1, 600 / img.width);
+                  const canvas = document.createElement('canvas');
+                  canvas.width = Math.round(img.width * scale);
+                  canvas.height = Math.round(img.height * scale);
+                  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  const dataUrl = canvas.toDataURL('image/webp', 0.8);
+
+                  await uploadPublicThumbnail(dataUrl, id);
+                  await queryClient.invalidateQueries({ queryKey: ['artwork-extras', id] });
+                } catch (err) {
+                  console.error('Thumbnail generation failed:', err);
+                } finally {
+                  setThumbnailGenerating(false);
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              {thumbnailGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {extras?.thumbnail_url ? 'Regenerate' : 'Generate thumbnail'}
+            </button>
+          </div>
         )}
 
         {/* Inline edit form */}

@@ -646,6 +646,7 @@ function renderChart(canvasId, title, buckets, color, yScale) {
         fill: true,
         tension: 0.3,
         pointRadius: 0,
+        pointHoverRadius: 4,
         borderWidth: 2,
       }],
     },
@@ -653,7 +654,25 @@ function renderChart(canvasId, title, buckets, color, yScale) {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          mode: 'index',
+          intersect: false,
+          backgroundColor: '#161b22',
+          borderColor: '#30363d',
+          borderWidth: 1,
+          titleColor: '#9eaab6',
+          bodyColor: '#e6edf3',
+          callbacks: {
+            label: function(ctx) {
+              return ctx.dataset.label + ': ' + ctx.parsed.y;
+            },
+          },
+        },
+      },
+      interaction: { mode: 'index', intersect: false },
       scales: {
         x: {
           ticks: {

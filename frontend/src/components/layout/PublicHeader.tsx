@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import { logout } from '@/lib/api/auth';
-import { Menu, X, LogOut, Home, Info, FileText, LayoutDashboard, Upload, ShieldCheck, Download, Search, Settings } from 'lucide-react';
+import { Menu, X, LogOut, Home, Info, FileText, LayoutDashboard, Upload, ShieldCheck, Download, Search, Settings, Users } from 'lucide-react';
 import { InstallButton } from './InstallPrompt';
 
 export function PublicHeader() {
@@ -53,12 +53,14 @@ export function PublicHeader() {
         { href: '/dashboard/upload', label: 'Upload Artwork', icon: Upload },
         ...(user?.is_admin ? [{ href: '/dashboard/admin', label: 'Admin', icon: ShieldCheck }] : []),
         { href: '/dashboard/settings', label: 'Manage My Public Collection Page', icon: Settings },
+        { href: '/users', label: 'Users', icon: Users },
         { href: '/explorer', label: 'Explorer', icon: Search },
         { href: '/about', label: 'About', icon: Info },
         { href: '/disclaimer', label: 'Disclaimer', icon: FileText },
       ]
     : [
         { href: '/', label: 'Home', icon: Home },
+        { href: '/users', label: 'Users', icon: Users },
         { href: '/explorer', label: 'Explorer', icon: Search },
         { href: '/about', label: 'About', icon: Info },
         { href: '/disclaimer', label: 'Disclaimer', icon: FileText },

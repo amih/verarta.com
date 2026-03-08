@@ -64,6 +64,8 @@ export interface ArtworkExtras {
   artist_name: string | null;
   collection_name: string | null;
   file_order: number[] | null;
+  hidden: boolean | null;
+  thumbnail_url: string | null;
 }
 
 export interface HistoryEvent {
@@ -89,6 +91,10 @@ export async function saveArtworkExtras(
   data: Partial<Omit<ArtworkExtras, 'artist_name' | 'collection_name'>>
 ): Promise<void> {
   await apiClient.put(`/api/artworks/${id}/extras`, data);
+}
+
+export async function setArtworkVisibility(id: number, hidden: boolean): Promise<void> {
+  await apiClient.put(`/api/artworks/${id}/visibility`, { hidden });
 }
 
 export async function getArtworkHistory(id: number): Promise<{ events: HistoryEvent[] }> {

@@ -246,6 +246,40 @@ pm2 restart verarta-backend
 
 ---
 
+## Test Chain (Variable Rate Block Production)
+
+A separate test chain with variable rate block production: **SLOW** (60s idle), **MEDIUM** (5s normal), **FAST** (500ms high load). The pace controller automatically adjusts block production based on activity, saving resources when idle and producing fast blocks during heavy load.
+
+See **[README_VARIABLE_RATE.md](README_VARIABLE_RATE.md)** for full documentation.
+
+### Quick Start
+
+```bash
+# Build the 500ms Spring image (first time only, ~30-60 min)
+docker build -t verarta/spring-500ms:latest \
+  --build-arg BLOCK_INTERVAL_MS=500 \
+  --build-arg PRODUCER_REPETITIONS=6 \
+  -f blockchain/Dockerfile blockchain/
+
+# Create RabbitMQ vhost for test chain
+docker exec verarta-rabbitmq rabbitmqctl add_vhost hyperion-test
+docker exec verarta-rabbitmq rabbitmqctl set_permissions -p hyperion-test rabbitmq ".*" ".*" ".*"
+
+# Start all test chain services
+docker compose -f docker-compose.test.yml up -d
+```
+
+### Test Chain Service URLs
+
+| Service | URL |
+|---------|-----|
+| Chain API | https://test-chain.verarta.com |
+| Block Explorer | https://test-explorer.verarta.com |
+| Hyperion API | https://test-hyperion.verarta.com |
+| Pace Controller | https://test-pace.verarta.com |
+
+---
+
 ## Environment Variables
 
 ### Backend (.env)

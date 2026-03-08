@@ -199,6 +199,8 @@ export interface ArtworkListResponse {
     collection_name?: string | null;
     era?: string | null;
     creation_date?: string | null;
+    hidden?: boolean;
+    thumbnail_url?: string | null;
   }>;
   count: number;
 }

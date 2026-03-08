@@ -20,6 +20,33 @@ export async function generateThumbnail(file: File): Promise<File | null> {
   }
 }
 
+const PUBLIC_THUMB_WIDTH = 600;
+
+/**
+ * Generate an unencrypted public thumbnail for image files.
+ * Returns a base64 data URL suitable for uploading to the public thumbnail endpoint.
+ */
+export async function generatePublicThumbnail(file: File): Promise<string | null> {
+  try {
+    if (!file.type.startsWith('image/')) return null;
+
+    const img = await createImageBitmap(file);
+    const scale = Math.min(1, PUBLIC_THUMB_WIDTH / img.width);
+    const width = Math.round(img.width * scale);
+    const height = Math.round(img.height * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, width, height);
+
+    return canvas.toDataURL('image/webp', 0.8);
+  } catch {
+    return null;
+  }
+}
+
 async function generatePdfThumbnail(file: File): Promise<File | null> {
   try {
     const pdfjsLib = await import('pdfjs-dist');

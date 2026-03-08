@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileIcon } from 'lucide-react';
+import { Eye, FileIcon } from 'lucide-react';
 import type { Artwork } from '@/types/artwork';
 import { ArtworkThumbnail } from './ArtworkThumbnail';
 
@@ -12,6 +12,8 @@ interface ArtworkCardProps {
     era?: string | null;
     creation_date?: string | null;
     description_html?: string | null;
+    hidden?: boolean;
+    thumbnail_url?: string | null;
   };
   files?: Array<{ id: string; mime_type: string }> | null;
 }
@@ -55,9 +57,14 @@ export function ArtworkCard({ artwork, files }: ArtworkCardProps) {
           ))}
         </div>
       )}
-      <h3 className="truncate text-sm font-medium text-zinc-900 group-hover:text-zinc-700 dark:text-zinc-100 dark:group-hover:text-zinc-300">
-        {artwork.title}
-      </h3>
+      <div className="flex items-center gap-1.5">
+        <h3 className="truncate text-sm font-medium text-zinc-900 group-hover:text-zinc-700 dark:text-zinc-100 dark:group-hover:text-zinc-300">
+          {artwork.title}
+        </h3>
+        {artwork.hidden === false && (
+          <Eye className="h-3.5 w-3.5 shrink-0 text-green-500" />
+        )}
+      </div>
       {truncatedDescription && (
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 line-clamp-3">
           {truncatedDescription}
