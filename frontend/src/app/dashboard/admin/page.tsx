@@ -288,6 +288,7 @@ export default function AdminPage() {
 
       // Decrypt each file's DEK and re-encrypt for target admin
       const batch: Array<{ file_id: number; new_encrypted_dek: string }> = [];
+      let failCount = 0;
       for (const file of filesToRekey) {
         const myEncDek = file.admin_encrypted_deks[myKeyIndex];
         if (!myEncDek) continue; // shouldn't happen given filter logic
@@ -301,13 +302,25 @@ export default function AdminPage() {
           authTag = parts[1];
         }
 
-        const dek = await decryptDek(dekB64, file.iv, authTag, myPrivateKey);
-        const { encryptedDek, ephemeralPublicKey } = await encryptDekForRecipient(dek, file.iv, targetKey.public_key);
-        batch.push({ file_id: file.file_id, new_encrypted_dek: `${encryptedDek}.${ephemeralPublicKey}` });
+        try {
+          const dek = await decryptDek(dekB64, file.iv, authTag, myPrivateKey);
+          const { encryptedDek, ephemeralPublicKey } = await encryptDekForRecipient(dek, file.iv, targetKey.public_key);
+          batch.push({ file_id: file.file_id, new_encrypted_dek: `${encryptedDek}.${ephemeralPublicKey}` });
+        } catch (err) {
+          failCount++;
+          console.error(`[rekey] Failed file_id=${file.file_id}:`, {
+            myKeyIndex,
+            admin_encrypted_deks_length: file.admin_encrypted_deks.length,
+            dekB64_length: dekB64.length,
+            iv: file.iv,
+            authTag,
+            error: err instanceof Error ? err.message : err,
+          });
+        }
       }
 
       if (batch.length === 0) {
-        setRekeyResult('Nothing to re-key (could not decrypt any files).');
+        setRekeyResult(`Nothing to re-key (could not decrypt any files). ${failCount} decryption failures — check browser console for details.`);
         return;
       }
 
@@ -315,8 +328,11 @@ export default function AdminPage() {
       const skippedWarning = skipped.length > 0
         ? ` Warning: ${skipped.length} file${skipped.length !== 1 ? 's' : ''} uploaded before admin key escrow was configured and cannot be re-keyed.`
         : '';
+      const failWarning = failCount > 0
+        ? ` ${failCount} file${failCount !== 1 ? 's' : ''} could not be decrypted (check console).`
+        : '';
       setRekeyResult(
-        `Done. ${result.processed} file${result.processed !== 1 ? 's' : ''} re-keyed${result.failed > 0 ? `, ${result.failed} failed` : ''}.${skippedWarning}`
+        `Done. ${result.processed} file${result.processed !== 1 ? 's' : ''} re-keyed${result.failed > 0 ? `, ${result.failed} failed` : ''}.${skippedWarning}${failWarning}`
       );
     } catch (err) {
       setRekeyResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
