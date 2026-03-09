@@ -516,7 +516,7 @@ void verartatoken::addadmindek(uint64_t file_id, std::string new_encrypted_dek) 
    check(it->admin_encrypted_deks.size() < active_admin_keys.size(),
          "file already has DEKs for all active admin keys");
 
-   artfiles.modify(it, same_payer, [&](auto& row) {
+   artfiles.modify(it, get_self(), [&](auto& row) {
       row.admin_encrypted_deks.push_back(new_encrypted_dek);
    });
 }
