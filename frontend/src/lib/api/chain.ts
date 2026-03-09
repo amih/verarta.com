@@ -35,6 +35,7 @@ export interface BlockDetail {
 
 export interface ChainStats {
   head_block_num: number;
+  last_irreversible_block_num: number;
   head_block_time: string;
   chain_id: string;
   server_version: string;

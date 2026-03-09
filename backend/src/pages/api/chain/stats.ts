@@ -51,6 +51,7 @@ export const GET: APIRoute = async () => {
       success: true,
       stats: {
         head_block_num: Number(info.head_block_num),
+        last_irreversible_block_num: Number(info.last_irreversible_block_num),
         head_block_time: String(info.head_block_time),
         chain_id: String(info.chain_id),
         server_version: String(info.server_version),
