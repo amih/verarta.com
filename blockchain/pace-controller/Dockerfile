@@ -1,0 +1,17 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+RUN npm install
+
+COPY tsconfig.json ./
+COPY src/ ./src/
+
+RUN npm run build
+
+COPY .env ./
+
+EXPOSE 3100
+
+CMD ["node", "dist/index.js"]

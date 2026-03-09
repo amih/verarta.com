@@ -88,6 +88,27 @@ services:
       - producer1
 
   # ──────────────────────────────────────────────────────────────
+  # Pace Controller (pauses idle block production)
+  # ──────────────────────────────────────────────────────────────
+
+  pace-controller:
+    build:
+      context: ./blockchain/pace-controller
+    container_name: verarta-pace-controller
+    volumes:
+      - ./blockchain/pace-controller/.env:/app/.env
+    ports:
+      - "3100:3100"
+    networks:
+      - verarta-net
+    restart: unless-stopped
+    depends_on:
+      - producer1
+      - producer2
+      - producer3
+      - producer4
+
+  # ──────────────────────────────────────────────────────────────
   # Full History Node
   # ──────────────────────────────────────────────────────────────
 

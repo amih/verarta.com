@@ -15,3 +15,4 @@ services:
   redis: { cpuset: "6-7" }
   rabbitmq: { cpuset: "6-7" }
   wallet: { cpuset: "6-7" }
+  pace-controller: { cpuset: "6-7" }
