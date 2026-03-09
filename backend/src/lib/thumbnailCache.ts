@@ -24,39 +24,70 @@ async function findThumbnailFile(artworkId: string): Promise<any | null> {
     index_position: 2, // byartwork secondary index
   });
 
-  // Find the thumbnail file (is_thumbnail = 1/true)
-  const thumbFile = result.rows.find((row: any) =>
-    String(row.artwork_id) === artworkId && row.is_thumbnail
+  const files = (result.rows as any[]).filter(
+    (row: any) => String(row.artwork_id) === artworkId && row.upload_complete
   );
 
-  return thumbFile || null;
+  // Prefer an explicit thumbnail file; fall back to the first main file
+  return files.find((f: any) => f.is_thumbnail) || files[0] || null;
 }
 
 /**
  * Reassemble encrypted file from blockchain chunks.
  */
 async function reassembleFile(fileId: string, totalChunks: number): Promise<Buffer> {
-  const chunkResult = await getTableRows({
-    code: 'verarta.core',
-    scope: 'verarta.core',
-    table: 'artchunks',
-    key_type: 'i64',
-    lower_bound: fileId,
-    upper_bound: fileId,
-    limit: totalChunks + 10,
-    index_position: 2, // byfile secondary index
+  // Each chunk is ~256KB; the chain API's 15ms-per-row ABI serialization
+  // deadline can timeout when fetching multiple large chunks at once.
+  // Strategy: find the first chunk's primary key via secondary index (limit=1),
+  // then paginate by primary key one chunk at a time.
+  const chainUrl = process.env.CHAIN_HISTORY_URL || 'http://localhost:8888';
+
+  async function fetchRows(body: Record<string, unknown>) {
+    const resp = await fetch(`${chainUrl}/v1/chain/get_table_rows`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'verarta.core', scope: 'verarta.core', table: 'artchunks', json: true, ...body }),
+    });
+    return await resp.json() as any;
+  }
+
+  // Step 1: Find the first chunk's primary key via secondary index
+  const first = await fetchRows({
+    index_position: 2, key_type: 'i64',
+    lower_bound: fileId, upper_bound: fileId, limit: 1,
   });
 
-  const chunks: Buffer[] = (chunkResult.rows as any[])
-    .filter((c: any) => String(c.file_id) === fileId)
-    .sort((a: any, b: any) => a.chunk_index - b.chunk_index)
-    .map((chunk: any) => Buffer.from(chunk.chunk_data, 'base64'));
-
-  if (chunks.length === 0) {
+  if (!first.rows?.length) {
     throw new Error(`No chunks found for file ${fileId}`);
   }
 
-  return Buffer.concat(chunks);
+  // Step 2: Paginate by primary key (chunk_id), one at a time
+  const chunkMap = new Map<number, Buffer>();
+  let lowerBound = String(first.rows[0].chunk_id);
+
+  for (let i = 0; i < totalChunks + 5 && chunkMap.size < totalChunks; i++) {
+    const result = await fetchRows({ lower_bound: lowerBound, limit: 1 });
+
+    for (const row of result.rows || []) {
+      if (String(row.file_id) === fileId) {
+        chunkMap.set(row.chunk_index, Buffer.from(row.chunk_data, 'base64'));
+      }
+    }
+
+    if (!result.more || !result.next_key) break;
+    lowerBound = String(result.next_key);
+
+    // If we've moved past our file's chunks, stop
+    const lastRow = result.rows?.[result.rows.length - 1];
+    if (lastRow && String(lastRow.file_id) !== fileId && chunkMap.size > 0) break;
+  }
+
+  if (chunkMap.size === 0) {
+    throw new Error(`No chunks found for file ${fileId}`);
+  }
+
+  const sorted = [...chunkMap.entries()].sort((a, b) => a[0] - b[0]);
+  return Buffer.concat(sorted.map(([, buf]) => buf));
 }
 
 /**
@@ -99,9 +130,20 @@ export async function generateCachedThumbnail(artworkId: string): Promise<string
     let dek: Uint8Array | null = null;
 
     // Also try the primary encrypted_dek (in case the owner is verarta.core)
-    for (const encDek of [thumbFile.encrypted_dek, ...adminDeks]) {
+    const allDeks = [thumbFile.encrypted_dek, ...adminDeks];
+    for (let i = 0; i < allDeks.length; i++) {
+      const encDek = allDeks[i];
+      if (!encDek) continue;
       try {
-        dek = await decryptDek(encDek, iv, authTag, servicePrivateKey);
+        // Admin DEKs use "encDek.ephPubKey" format; primary uses auth_tag as ephemeral key
+        let dekB64 = encDek;
+        let ephPubKey = authTag;
+        if (encDek.includes('.')) {
+          const parts = encDek.split('.');
+          dekB64 = parts[0];
+          ephPubKey = parts[1];
+        }
+        dek = await decryptDek(dekB64, iv, ephPubKey, servicePrivateKey);
         break;
       } catch {
         // Not our key, try next

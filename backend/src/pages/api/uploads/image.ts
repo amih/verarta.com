@@ -6,7 +6,7 @@ import { createHash } from 'crypto';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 
-const UPLOADS_DIR = join(process.cwd(), 'uploads');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || join(process.cwd(), 'uploads');
 
 export const POST: APIRoute = async (context) => {
   const authResult = await requireAuth(context);
