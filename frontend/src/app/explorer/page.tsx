@@ -149,15 +149,34 @@ export default function ExplorerOverview() {
   const [actions, setActions] = useState<HyperionAction[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [blocksLoading, setBlocksLoading] = useState(false);
+  const [headBlockNum, setHeadBlockNum] = useState<number | null>(null);
+  const [beforeBlock, setBeforeBlock] = useState<number | undefined>(undefined);
   const { status: paceStatus, connected: paceConnected } = usePaceController();
+
+  const BLOCKS_PER_PAGE = 100;
 
   useEffect(() => {
     Promise.all([
       getChainStats().then((r) => setStats(r.stats)),
-      getRecentBlocks(20).then((r) => setBlocks(r.blocks)),
+      getRecentBlocks(BLOCKS_PER_PAGE).then((r) => {
+        setBlocks(r.blocks);
+        setHeadBlockNum(r.head_block_num);
+      }),
       getActions({ limit: 10, filter: '!eosio:onblock' }).then((r) => setActions(r.actions)).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
+
+  function loadBlocks(before?: number) {
+    setBlocksLoading(true);
+    getRecentBlocks(BLOCKS_PER_PAGE, before)
+      .then((r) => {
+        setBlocks(r.blocks);
+        setBeforeBlock(before);
+        setHeadBlockNum(r.head_block_num);
+      })
+      .finally(() => setBlocksLoading(false));
+  }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -231,11 +250,11 @@ export default function ExplorerOverview() {
       )}
 
       {!loading && (
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="space-y-8">
           {/* Recent Blocks */}
           <div>
             <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">Recent Blocks</h2>
-            <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <div className={`overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 ${blocksLoading ? 'opacity-50' : ''}`}>
               <table className="w-full text-sm">
                 <thead className="bg-zinc-50 dark:bg-zinc-900">
                   <tr>
@@ -265,6 +284,43 @@ export default function ExplorerOverview() {
                 </tbody>
               </table>
             </div>
+            {/* Pagination */}
+            {blocks.length > 0 && (
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    const lastBlock = blocks[blocks.length - 1];
+                    if (lastBlock && lastBlock.block_num > 1) {
+                      loadBlocks(lastBlock.block_num);
+                    }
+                  }}
+                  disabled={blocksLoading || (blocks.length > 0 && blocks[blocks.length - 1].block_num <= 1)}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  &larr; Older blocks
+                </button>
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                  Blocks {blocks[blocks.length - 1]?.block_num.toLocaleString()} &ndash; {blocks[0]?.block_num.toLocaleString()}
+                </span>
+                <button
+                  onClick={() => {
+                    if (!beforeBlock) return;
+                    const firstBlock = blocks[0];
+                    if (!firstBlock || !headBlockNum) return;
+                    const newBefore = firstBlock.block_num + BLOCKS_PER_PAGE + 1;
+                    if (newBefore > headBlockNum + 1) {
+                      loadBlocks(undefined);
+                    } else {
+                      loadBlocks(newBefore);
+                    }
+                  }}
+                  disabled={blocksLoading || !beforeBlock}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Newer blocks &rarr;
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Recent Actions */}

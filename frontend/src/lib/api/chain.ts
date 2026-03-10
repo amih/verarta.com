@@ -93,8 +93,10 @@ export async function getBlock(blockNum: number): Promise<{ success: true; block
   return res.data;
 }
 
-export async function getRecentBlocks(limit = 20): Promise<{ success: true; head_block_num: number; blocks: BlockSummary[] }> {
-  const res = await apiClient.get('/api/chain/blocks-recent', { params: { limit } });
+export async function getRecentBlocks(limit = 20, before?: number): Promise<{ success: true; head_block_num: number; blocks: BlockSummary[] }> {
+  const params: Record<string, number> = { limit };
+  if (before) params.before = before;
+  const res = await apiClient.get('/api/chain/blocks-recent', { params });
   return res.data;
 }
 

@@ -5,15 +5,20 @@ export const GET: APIRoute = async ({ url }) => {
   try {
     const limit = Math.min(
       Math.max(parseInt(url.searchParams.get('limit') || '20', 10) || 20, 1),
-      50
+      100
     );
 
     const info = await chainClient.v1.chain.get_info();
     const headBlock = Number(info.head_block_num);
 
+    const beforeParam = url.searchParams.get('before');
+    const startBlock = beforeParam
+      ? Math.min(parseInt(beforeParam, 10) - 1, headBlock)
+      : headBlock;
+
     const blocks = [];
-    for (let i = 0; i < limit && headBlock - i >= 1; i++) {
-      const blockNum = headBlock - i;
+    for (let i = 0; i < limit && startBlock - i >= 1; i++) {
+      const blockNum = startBlock - i;
       try {
         const block = await chainClient.v1.chain.get_block(blockNum);
         blocks.push({
