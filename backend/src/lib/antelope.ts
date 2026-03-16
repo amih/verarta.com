@@ -71,15 +71,27 @@ export async function getTableRows(params: {
   });
 }
 
-// Wake the pace controller so producers are running before we push a transaction.
-// Fire-and-forget — if the pace controller is unavailable we proceed anyway.
+// Wake the pace controller and wait until producers are producing fresh blocks.
+// This prevents "expired transaction" errors caused by building transactions
+// against a stale head_block_time when the chain was paused.
 async function ensureChainActive(): Promise<void> {
   const url = process.env.PACE_CONTROLLER_URL;
   if (!url) return;
   try {
     await fetch(`${url}/wake`, { method: 'POST', signal: AbortSignal.timeout(2000) });
   } catch {
-    // best effort
+    // best effort — proceed even if pace controller is unreachable
+  }
+  // Poll until head_block_time is recent (within 30s of now)
+  for (let i = 0; i < 15; i++) {
+    try {
+      const info = await producerClient.v1.chain.get_info();
+      const headTimeMs = info.head_block_time.toMilliseconds();
+      if (Date.now() - headTimeMs < 30000) return;
+    } catch {
+      // retry
+    }
+    await new Promise((r) => setTimeout(r, 500));
   }
 }
 
