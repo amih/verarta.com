@@ -71,8 +71,21 @@ export async function getTableRows(params: {
   });
 }
 
+// Wake the pace controller so producers are running before we push a transaction.
+// Fire-and-forget — if the pace controller is unavailable we proceed anyway.
+async function ensureChainActive(): Promise<void> {
+  const url = process.env.PACE_CONTROLLER_URL;
+  if (!url) return;
+  try {
+    await fetch(`${url}/wake`, { method: 'POST', signal: AbortSignal.timeout(2000) });
+  } catch {
+    // best effort
+  }
+}
+
 // Push transaction
 export async function pushTransaction(serializedTransaction: any) {
+  await ensureChainActive();
   return await producerClient.v1.chain.push_transaction(serializedTransaction);
 }
 
@@ -85,6 +98,7 @@ export async function buildAndSignTransaction(
   data: Record<string, unknown>,
   authorization?: PermissionLevel
 ): Promise<{ transaction_id: string }> {
+  await ensureChainActive();
   const info = await chainClient.v1.chain.get_info();
   const contractAccount = CHAIN_CONFIG.contractAccount;
   const serviceKey = getServiceKey();
@@ -145,6 +159,7 @@ export async function createBlockchainAccount(
   accountName: string,
   userAntelopePublicKey: string
 ): Promise<void> {
+  await ensureChainActive();
   const info = await chainClient.v1.chain.get_info();
   const serviceKey = getServiceKey();
   const contractAccount = CHAIN_CONFIG.contractAccount;
@@ -222,6 +237,7 @@ export async function addDeviceKeyToAccount(
   accountName: string,
   newPublicKey: string
 ): Promise<boolean> {
+  await ensureChainActive();
   const account = await getAccount(accountName);
   const activePerm = account.permissions.find(
     (p: any) => String(p.perm_name) === 'active'

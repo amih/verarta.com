@@ -8,7 +8,7 @@ let config = loadConfig();
 const producer = new ProducerApi(config.producerUrls);
 const wakeEmitter = new EventEmitter();
 
-type State = "AWAKE" | "SLEEPING";
+type State = "AWAKE" | "SLOW";
 
 let state: State = "AWAKE";
 let lastProcessedBlock = 0;
@@ -23,8 +23,8 @@ function reloadConfig(): Config {
   config = loadConfig();
   const changes: string[] = [];
   if (prev.idleBlockThreshold !== config.idleBlockThreshold) changes.push(`idleBlockThreshold: ${prev.idleBlockThreshold} -> ${config.idleBlockThreshold}`);
-  if (prev.sleepDurationMs !== config.sleepDurationMs) changes.push(`sleepDurationMs: ${prev.sleepDurationMs} -> ${config.sleepDurationMs}`);
-  if (prev.wakeDurationMs !== config.wakeDurationMs) changes.push(`wakeDurationMs: ${prev.wakeDurationMs} -> ${config.wakeDurationMs}`);
+  if (prev.slowIntervalMs !== config.slowIntervalMs) changes.push(`slowIntervalMs: ${prev.slowIntervalMs} -> ${config.slowIntervalMs}`);
+  if (prev.slowBurstBlocks !== config.slowBurstBlocks) changes.push(`slowBurstBlocks: ${prev.slowBurstBlocks} -> ${config.slowBurstBlocks}`);
   if (prev.healthCheckIntervalMs !== config.healthCheckIntervalMs) changes.push(`healthCheckIntervalMs: ${prev.healthCheckIntervalMs} -> ${config.healthCheckIntervalMs}`);
   if (changes.length > 0) {
     console.log(`[config] Reloaded: ${changes.join(", ")}`);
@@ -55,8 +55,8 @@ function statusPayload() {
     uptime: Math.floor((Date.now() - startTime) / 1000),
     config: {
       idleBlockThreshold: config.idleBlockThreshold,
-      sleepDurationMs: config.sleepDurationMs,
-      wakeDurationMs: config.wakeDurationMs,
+      slowIntervalMs: config.slowIntervalMs,
+      slowBurstBlocks: config.slowBurstBlocks,
     },
   };
 }
@@ -97,8 +97,8 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       ok: true,
       config: {
         idleBlockThreshold: updated.idleBlockThreshold,
-        sleepDurationMs: updated.sleepDurationMs,
-        wakeDurationMs: updated.wakeDurationMs,
+        slowIntervalMs: updated.slowIntervalMs,
+        slowBurstBlocks: updated.slowBurstBlocks,
         healthCheckIntervalMs: updated.healthCheckIntervalMs,
       },
     });
@@ -148,8 +148,8 @@ async function healthCheck(): Promise<void> {
     await producer.getInfo();
     healthy = true;
 
-    // If sleeping and a producer restarted (comes up resumed), re-assert pause
-    if (state === "SLEEPING") {
+    // If in slow mode and a producer restarted (comes up resumed), re-assert pause
+    if (state === "SLOW") {
       try {
         await producer.pause();
       } catch {
@@ -201,14 +201,14 @@ async function mainLoop(): Promise<void> {
   idleBlockCount = 0;
 
   console.log("[main] Starting in AWAKE mode (producers running).");
-  console.log(`[main] Config: sleep=${config.sleepDurationMs}ms, wake=${config.wakeDurationMs}ms, idleThreshold=${config.idleBlockThreshold} blocks`);
+  console.log(`[main] Config: slowInterval=${config.slowIntervalMs}ms, slowBurst=${config.slowBurstBlocks} blocks, idleThreshold=${config.idleBlockThreshold} blocks`);
   broadcast("status", statusPayload());
 
   while (true) {
     if (state === "AWAKE") {
       await awakeTick();
     } else {
-      await sleepCycle();
+      await slowCycle();
     }
   }
 }
@@ -244,17 +244,16 @@ async function awakeTick(): Promise<void> {
   // Broadcast block update to WebSocket clients
   broadcast("block", statusPayload());
 
-  // Transition to SLEEPING when idle threshold reached
+  // Transition to SLOW when idle threshold reached
   if (idleBlockCount >= config.idleBlockThreshold) {
-    console.log(`[main] ${idleBlockCount} consecutive empty blocks. Transitioning to SLEEPING.`);
-    setState("SLEEPING");
+    console.log(`[main] ${idleBlockCount} consecutive empty blocks (~1 min idle). Transitioning to SLOW.`);
+    setState("SLOW");
   }
 }
 
-async function sleepCycle(): Promise<void> {
-  const sleepSec = Math.floor(config.sleepDurationMs / 1000);
-  const wakeSec = Math.floor(config.wakeDurationMs / 1000);
-  console.log(`[main] SLEEPING — pausing all producers. Will check in ${sleepSec}s (wake window: ${wakeSec}s).`);
+async function slowCycle(): Promise<void> {
+  const slowSec = Math.floor(config.slowIntervalMs / 1000);
+  console.log(`[main] SLOW — pausing producers. Will resume in ${slowSec}s (or on wake signal).`);
 
   try {
     await producer.pause();
@@ -264,15 +263,15 @@ async function sleepCycle(): Promise<void> {
 
   broadcast("status", statusPayload());
 
-  const result = await interruptibleSleep(config.sleepDurationMs);
+  const result = await interruptibleSleep(config.slowIntervalMs);
 
   if (result === "wake") {
-    console.log("[main] Wake signal received!");
+    console.log("[main] Wake signal received! Resuming producers.");
   } else {
-    console.log("[main] Sleep timer expired, checking for activity...");
+    console.log(`[main] Slow interval expired. Producing burst of ${config.slowBurstBlocks} blocks to drain pending transactions...`);
   }
 
-  // Resume producers and watch for activity during the wake window
+  // Resume producers
   try {
     await producer.resume();
   } catch (err) {
@@ -282,46 +281,45 @@ async function sleepCycle(): Promise<void> {
     return;
   }
 
-  console.log(`[main] Awake for ${wakeSec}s, checking for activity...`);
   setState("AWAKE");
   idleBlockCount = 0;
 
-  const wakeDeadline = Date.now() + config.wakeDurationMs;
-  let activityFound = false;
+  if (result === "timeout") {
+    // Wait for a burst of blocks, then check if any transactions came in.
+    // If no activity: go back to SLOW. If activity: stay AWAKE.
+    const burstDeadline = Date.now() + 30000;
+    const startBlock = lastProcessedBlock;
+    let activityFound = false;
+    let burstBlocksSeen = 0;
 
-  while (Date.now() < wakeDeadline) {
-    await new Promise((r) => setTimeout(r, 1000));
-
-    try {
-      const info = await producer.getInfo();
-      const headBlock = info.head_block_num;
-
-      if (headBlock > lastProcessedBlock) {
-        const prevProcessed = lastProcessedBlock;
-
-        const hasActivity = await hasActivityInRange(prevProcessed + 1, headBlock);
-        lastProcessedBlock = headBlock;
-
-        if (hasActivity) {
-          activityFound = true;
-          idleBlockCount = 0;
+    while (Date.now() < burstDeadline && burstBlocksSeen < config.slowBurstBlocks) {
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        const info = await producer.getInfo();
+        const headBlock = info.head_block_num;
+        if (headBlock > lastProcessedBlock) {
+          const hasActivity = await hasActivityInRange(lastProcessedBlock + 1, headBlock);
+          burstBlocksSeen = headBlock - startBlock;
+          lastProcessedBlock = headBlock;
+          if (hasActivity) {
+            activityFound = true;
+            idleBlockCount = 0;
+          }
+          broadcast("block", statusPayload());
         }
-
-        broadcast("block", statusPayload());
+      } catch {
+        // retry next tick
       }
-    } catch {
-      // retry next tick
+    }
+
+    if (activityFound) {
+      console.log("[main] Activity detected during burst. Staying AWAKE.");
+    } else {
+      console.log("[main] No activity during burst. Going back to SLOW.");
+      setState("SLOW");
     }
   }
-
-  if (activityFound) {
-    console.log("[main] Activity detected during wake window! Staying AWAKE.");
-    // Stay AWAKE, the normal awakeTick loop will handle idle detection
-  } else {
-    console.log("[main] No activity during wake window. Going back to sleep.");
-    setState("SLEEPING");
-    idleBlockCount = 0;
-  }
+  // If result === "wake": stay AWAKE — normal awakeTick loop handles idle detection
 }
 
 // ─── Graceful Shutdown ───

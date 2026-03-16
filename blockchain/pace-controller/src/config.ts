@@ -5,8 +5,8 @@ export interface Config {
   producerUrls: string[];
   port: number;
   idleBlockThreshold: number;
-  sleepDurationMs: number;
-  wakeDurationMs: number;
+  slowIntervalMs: number;
+  slowBurstBlocks: number;
   healthCheckIntervalMs: number;
 }
 
@@ -46,9 +46,9 @@ export function loadConfig(): Config {
   return {
     producerUrls: urlString.split(",").map((u) => u.trim()).filter(Boolean),
     port: parseInt(getVar(envVars, "PORT", "3100"), 10),
-    idleBlockThreshold: parseInt(getVar(envVars, "IDLE_BLOCK_THRESHOLD", "20"), 10),
-    sleepDurationMs: parseInt(getVar(envVars, "SLEEP_DURATION_MS", "3600000"), 10),
-    wakeDurationMs: parseInt(getVar(envVars, "WAKE_DURATION_MS", "120000"), 10),
+    idleBlockThreshold: parseInt(getVar(envVars, "IDLE_BLOCK_THRESHOLD", "12"), 10),
+    slowIntervalMs: parseInt(getVar(envVars, "SLOW_INTERVAL_MS", "3600000"), 10),
+    slowBurstBlocks: parseInt(getVar(envVars, "SLOW_BURST_BLOCKS", "20"), 10),
     healthCheckIntervalMs: parseInt(getVar(envVars, "HEALTH_CHECK_INTERVAL_MS", "30000"), 10),
   };
 }
