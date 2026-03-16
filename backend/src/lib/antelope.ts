@@ -82,16 +82,17 @@ async function ensureChainActive(): Promise<void> {
   } catch {
     // best effort — proceed even if pace controller is unreachable
   }
-  // Poll until head_block_time is recent (within 30s of now)
-  for (let i = 0; i < 15; i++) {
+  // Poll until head_block_time is recent. Block interval is 5s, so poll
+  // every 2s and accept a head block within 60s of wall clock.
+  for (let i = 0; i < 10; i++) {
     try {
       const info = await producerClient.v1.chain.get_info();
       const headTimeMs = info.head_block_time.toMilliseconds();
-      if (Date.now() - headTimeMs < 30000) return;
+      if (Date.now() - headTimeMs < 60000) return;
     } catch {
       // retry
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 2000));
   }
 }
 
