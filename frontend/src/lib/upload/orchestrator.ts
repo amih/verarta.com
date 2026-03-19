@@ -3,10 +3,38 @@ import { getKeyPair, importEncryptedKeyData } from '@/lib/crypto/keys';
 import { getAntelopeKey, signAndPushTransaction } from '@/lib/crypto/antelope';
 import { fetchKeys } from '@/lib/api/auth';
 import { uploadStart } from '@/lib/api/artworks';
+import { queryTable } from '@/lib/api/chain';
 import { uint8ToBase64 } from '@/lib/utils/chunking';
 import { useUploadStore } from '@/store/upload';
 import { generateThumbnail, generatePublicThumbnail } from './thumbnail';
 import { uploadPublicThumbnail } from '@/lib/api/profile';
+
+/**
+ * Wait for an artwork to appear on-chain after createart tx.
+ * Polls the artworks table every 2s, up to 30s (6 block intervals).
+ */
+async function waitForArtworkOnChain(artworkId: number, owner: string): Promise<void> {
+  for (let i = 0; i < 15; i++) {
+    try {
+      const result = await queryTable({
+        code: 'verarta.core',
+        table: 'artworks',
+        scope: 'verarta.core',
+        lower_bound: String(artworkId),
+        upper_bound: String(artworkId),
+        limit: 1,
+      });
+      if (result.rows && result.rows.length > 0) {
+        console.log('[upload] Artwork confirmed on-chain after', (i + 1) * 2, 'seconds');
+        return;
+      }
+    } catch {
+      // retry
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error('Artwork not confirmed on-chain after 30s. Please try again.');
+}
 
 export interface AddFileOptions {
   artworkId: number;
@@ -106,6 +134,9 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
     );
 
     store.updateProgress(tempId, 1);
+
+    // 3b. Wait for createart to be included in a block before addfile
+    await waitForArtworkOnChain(artworkId, opts.blockchainAccount);
 
     // 4. Sign & push `addfile` tx from browser (encryption metadata on-chain)
     // Convert file hash from hex to the checksum256 format the contract expects

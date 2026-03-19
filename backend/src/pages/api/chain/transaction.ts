@@ -55,24 +55,36 @@ export const POST: APIRoute = async (context) => {
   } catch (error) {
     console.error('Push transaction error:', error);
 
-    // Parse blockchain error messages
+    // Parse blockchain error messages — extract assertion message from chain response
     let errorMessage = 'Failed to push transaction';
-    if (error instanceof Error) {
-      errorMessage = error.message;
+    let details = error instanceof Error ? error.message : 'Unknown error';
 
-      // Check for common blockchain errors
+    // Antelope API errors carry the assertion message in response.json.error.details
+    const chainError = (error as any)?.response?.json?.error;
+    if (chainError?.details?.length > 0) {
+      const assertionDetail = chainError.details.find(
+        (d: any) => d.message?.includes('assertion failure with message:')
+      );
+      if (assertionDetail) {
+        const match = assertionDetail.message.match(/assertion failure with message: (.+)/);
+        errorMessage = match ? match[1] : assertionDetail.message;
+        details = assertionDetail.message;
+      }
+    } else if (error instanceof Error) {
       if (errorMessage.includes('insufficient')) {
         errorMessage = 'Insufficient resources (CPU, NET, or RAM)';
-      } else if (errorMessage.includes('expired')) {
+      } else if (error.message.includes('expired')) {
         errorMessage = 'Transaction expired';
-      } else if (errorMessage.includes('duplicate')) {
+      } else if (error.message.includes('duplicate')) {
         errorMessage = 'Duplicate transaction';
+      } else {
+        errorMessage = error.message;
       }
     }
 
     return new Response(JSON.stringify({
       error: errorMessage,
-      details: error instanceof Error ? error.message : 'Unknown error',
+      details,
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
