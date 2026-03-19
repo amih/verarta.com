@@ -46,18 +46,32 @@ export const GET: APIRoute = async ({ url }) => {
 
     const query = validation.data;
 
-    // Query blockchain table
-    const result = await getTableRows({
+    // Query blockchain table using raw fetch to avoid wharfkit Name conversion
+    // issues with numeric bounds
+    const nodeUrl = process.env.HISTORY_NODE_URL || 'http://localhost:8888';
+    const body: Record<string, unknown> = {
+      json: true,
       code: query.code,
       scope: query.scope,
       table: query.table,
-      lower_bound: query.lower_bound,
-      upper_bound: query.upper_bound,
       limit: query.limit,
-      index_position: query.index_position,
-      key_type: query.key_type,
       reverse: query.reverse,
+    };
+    if (query.lower_bound) body.lower_bound = query.lower_bound;
+    if (query.upper_bound) body.upper_bound = query.upper_bound;
+    if (query.index_position) body.index_position = query.index_position;
+    if (query.key_type) body.key_type = query.key_type;
+
+    const resp = await fetch(`${nodeUrl}/v1/chain/get_table_rows`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text);
+    }
+    const result = await resp.json();
 
     return new Response(JSON.stringify({
       success: true,
