@@ -74,7 +74,7 @@ export async function getTableRows(params: {
 // Wake the pace controller and wait until producers are producing fresh blocks.
 // This prevents "expired transaction" errors caused by building transactions
 // against a stale head_block_time when the chain was paused.
-async function ensureChainActive(): Promise<void> {
+export async function ensureChainActive(): Promise<void> {
   const url = process.env.PACE_CONTROLLER_URL;
   if (!url) return;
   try {

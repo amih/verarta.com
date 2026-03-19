@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
-import { getChainInfo } from '../../../lib/antelope.js';
+import { getChainInfo, ensureChainActive } from '../../../lib/antelope.js';
 
 export const GET: APIRoute = async () => {
   try {
+    await ensureChainActive();
     const info = await getChainInfo();
 
     return new Response(JSON.stringify({
