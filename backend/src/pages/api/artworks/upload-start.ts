@@ -105,7 +105,36 @@ export const POST: APIRoute = async (context) => {
       await new Promise((r) => setTimeout(r, 2000));
     }
 
-    // Upload all chunks server-side using service key
+    // Helper: wait for uploaded_chunks to reach expected count on-chain
+    async function waitForChunkCount(expectedCount: number): Promise<void> {
+      for (let attempt = 0; attempt < 15; attempt++) {
+        try {
+          const resp = await fetch(`${nodeUrl}/v1/chain/get_table_rows`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              json: true,
+              code: contractAccount,
+              scope: contractAccount,
+              table: 'artfiles',
+              lower_bound: String(file_id),
+              upper_bound: String(file_id),
+              limit: 1,
+            }),
+          });
+          const result = await resp.json();
+          if (result.rows?.[0]?.uploaded_chunks >= expectedCount) return;
+        } catch {
+          // retry
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      throw new Error(`Chunk count did not reach ${expectedCount} after 30s`);
+    }
+
+    // Upload all chunks server-side using service key.
+    // With 5-second block intervals, each chunk must be confirmed before the next
+    // to avoid "file not found" or stale state errors.
     for (let i = 0; i < totalChunks; i++) {
       const chunkBuffer = await readChunk(tempFilePath, i);
       const chunkDataB64 = chunkBuffer.toString('base64');
@@ -120,6 +149,9 @@ export const POST: APIRoute = async (context) => {
         chunk_size: chunkBuffer.length,
       });
 
+      // Wait for this chunk to be confirmed on-chain before pushing the next
+      await waitForChunkCount(i + 1);
+
       // Track progress in database
       await query(
         `UPDATE file_uploads SET uploaded_chunks = $1 WHERE upload_id = $2`,
@@ -127,7 +159,7 @@ export const POST: APIRoute = async (context) => {
       );
     }
 
-    // Complete the file on-chain
+    // Complete the file on-chain (all chunks confirmed at this point)
     await buildAndSignTransaction('completefile', {
       file_id,
       owner: ownerAccount,
