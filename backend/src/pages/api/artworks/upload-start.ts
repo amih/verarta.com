@@ -12,7 +12,7 @@ import {
   readChunk,
   deleteTempFile,
 } from '../../../lib/fileUpload.js';
-import { buildAndSignTransaction, CHAIN_CONFIG } from '../../../lib/antelope.js';
+import { buildAndSignTransaction, CHAIN_CONFIG, chainClient } from '../../../lib/antelope.js';
 
 const UploadStartSchema = z.object({
   artwork_id: z.number().int().positive(),
@@ -77,6 +77,33 @@ export const POST: APIRoute = async (context) => {
 
     const contractAccount = String(CHAIN_CONFIG.contractAccount);
     const ownerAccount = user.blockchainAccount;
+
+    // Wait for the addfile transaction (pushed by frontend) to be included in a block.
+    // The uploadchunk action requires the file to exist on-chain.
+    const nodeUrl = process.env.HISTORY_NODE_URL || 'http://localhost:8888';
+    for (let attempt = 0; attempt < 15; attempt++) {
+      try {
+        const resp = await fetch(`${nodeUrl}/v1/chain/get_table_rows`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            json: true,
+            code: contractAccount,
+            scope: contractAccount,
+            table: 'artfiles',
+            lower_bound: String(file_id),
+            upper_bound: String(file_id),
+            limit: 1,
+          }),
+        });
+        const result = await resp.json();
+        if (result.rows && result.rows.length > 0) break;
+      } catch {
+        // retry
+      }
+      if (attempt === 14) throw new Error('File record not confirmed on-chain after 30s');
+      await new Promise((r) => setTimeout(r, 2000));
+    }
 
     // Upload all chunks server-side using service key
     for (let i = 0; i < totalChunks; i++) {
