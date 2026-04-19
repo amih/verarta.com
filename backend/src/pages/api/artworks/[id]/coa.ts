@@ -9,6 +9,28 @@ import { getTableRows } from '../../../../lib/antelope.js';
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(process.cwd(), 'uploads');
 const PUBLIC_BASE = process.env.PUBLIC_BASE_URL || 'https://verarta.com';
+const LOGO_PATH = join(process.cwd(), 'src', 'assets', 'logo-light.svg');
+
+// Brand colors (match frontend manifest / logo)
+const BRAND_PURPLE = '#250D59';
+const BRAND_LAVENDER = '#DAA5DE';
+
+let logoPngCache: Buffer | null = null;
+async function getLogoPng(): Promise<Buffer | null> {
+  if (logoPngCache) return logoPngCache;
+  try {
+    const svg = await readFile(LOGO_PATH);
+    // Rasterize at 3× for crisp print. Target final height ~32pt ≈ 128px @ 4x.
+    logoPngCache = await sharp(svg, { density: 600 })
+      .resize({ height: 200, withoutEnlargement: false })
+      .png()
+      .toBuffer();
+    return logoPngCache;
+  } catch (err) {
+    console.warn('[coa] Failed to load logo:', err);
+    return null;
+  }
+}
 
 type ArtworkData = {
   id: string;
@@ -91,7 +113,12 @@ async function loadThumbnail(url: string | null): Promise<Buffer | null> {
   }
 }
 
-function buildPdf(artwork: ArtworkData, thumbnail: Buffer | null, qrDataUrl: string): Promise<Buffer> {
+function buildPdf(
+  artwork: ArtworkData,
+  thumbnail: Buffer | null,
+  qrDataUrl: string,
+  logo: Buffer | null
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 56 });
     const chunks: Buffer[] = [];
@@ -103,19 +130,32 @@ function buildPdf(artwork: ArtworkData, thumbnail: Buffer | null, qrDataUrl: str
     const pageHeight = doc.page.height;
     const contentWidth = pageWidth - doc.page.margins.left - doc.page.margins.right;
 
-    // Header band
-    doc.rect(0, 0, pageWidth, 72).fill('#1a1a1a');
-    doc.fillColor('#ffffff')
-      .font('Helvetica-Bold')
-      .fontSize(22)
-      .text('VERARTA', doc.page.margins.left, 26, { width: contentWidth });
-    doc.fontSize(10)
+    // Header band (brand purple)
+    const headerHeight = 80;
+    doc.rect(0, 0, pageWidth, headerHeight).fill(BRAND_PURPLE);
+
+    if (logo) {
+      try {
+        doc.image(logo, doc.page.margins.left, 24, { height: 32 });
+      } catch {
+        doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(22)
+          .text('VERARTA', doc.page.margins.left, 28, { width: contentWidth });
+      }
+    } else {
+      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(22)
+        .text('VERARTA', doc.page.margins.left, 28, { width: contentWidth });
+    }
+
+    doc.fillColor(BRAND_LAVENDER)
       .font('Helvetica')
-      .fillColor('#bbbbbb')
-      .text('Certificate of Authenticity', doc.page.margins.left, 52, { width: contentWidth });
+      .fontSize(11)
+      .text('Certificate of Authenticity', doc.page.margins.left, 58, {
+        width: contentWidth,
+        align: 'right',
+      });
 
     doc.fillColor('#000000');
-    let y = 100;
+    let y = headerHeight + 24;
 
     // Artwork image
     if (thumbnail) {
@@ -218,7 +258,8 @@ export const GET: APIRoute = async (context) => {
       width: 400,
     });
 
-    const pdf = await buildPdf(artwork, thumbnail, qrDataUrl);
+    const logo = await getLogoPng();
+    const pdf = await buildPdf(artwork, thumbnail, qrDataUrl, logo);
 
     const safeTitle = (artwork.title || 'artwork')
       .replace(/[^a-z0-9]+/gi, '_')
