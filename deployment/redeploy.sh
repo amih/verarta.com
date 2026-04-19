@@ -37,6 +37,12 @@ fail() { echo -e "${RED}[error]${NC} $1"; exit 1; }
 log "Testing SSH connection..."
 ssh -o ConnectTimeout=5 "$SSH_HOST" "echo ok" >/dev/null 2>&1 || fail "Cannot SSH to $SSH_HOST"
 
+# ── Build version identifier ────────────────────────────────────────────────
+GIT_SHA=$(cd "$PROJECT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DEPLOY_TS=$(date -u +%Y%m%dT%H%M%SZ)
+APP_VERSION="${GIT_SHA}-${DEPLOY_TS}"
+log "Deploy version: $APP_VERSION"
+
 # ── Backend ─────────────────────────────────────────────────────────────────
 deploy_backend() {
   log "Syncing backend source to $SSH_HOST:$BACKEND_DIR/src ..."
@@ -46,6 +52,9 @@ deploy_backend() {
     --exclude='.env' \
     "$PROJECT_ROOT/backend/src/" \
     "$SSH_HOST:$BACKEND_DIR/src/"
+
+  log "Writing VERSION file..."
+  ssh "$SSH_HOST" "echo '$APP_VERSION' > $BACKEND_DIR/VERSION"
 
   log "Building backend on server..."
   ssh "$SSH_HOST" "cd $BACKEND_DIR && npm run build"
