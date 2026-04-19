@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { query } from './db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
-const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
+const JWT_EXPIRY = process.env.JWT_EXPIRY || '60d';
 
 export interface SessionPayload {
   userId: number;
