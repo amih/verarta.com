@@ -3,6 +3,7 @@ import { join } from 'path';
 import { readFile } from 'fs/promises';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import sharp from 'sharp';
 import { query } from '../../../../lib/db.js';
 import { getTableRows } from '../../../../lib/antelope.js';
 
@@ -82,7 +83,9 @@ async function loadThumbnail(url: string | null): Promise<Buffer | null> {
   const fullPath = join(UPLOADS_DIR, relative);
   if (!fullPath.startsWith(UPLOADS_DIR)) return null;
   try {
-    return await readFile(fullPath);
+    const raw = await readFile(fullPath);
+    // PDFKit only supports JPEG and PNG. Our thumbnails are WebP, so transcode.
+    return await sharp(raw).png().toBuffer();
   } catch {
     return null;
   }
@@ -117,17 +120,17 @@ function buildPdf(artwork: ArtworkData, thumbnail: Buffer | null, qrDataUrl: str
     // Artwork image
     if (thumbnail) {
       const maxWidth = contentWidth;
-      const maxHeight = 280;
+      const maxHeight = 220;
       try {
         doc.image(thumbnail, doc.page.margins.left, y, {
           fit: [maxWidth, maxHeight],
           align: 'center',
           valign: 'center',
         });
+        y += maxHeight + 16;
       } catch {
-        // Fall through — skip image if PDFKit can't decode it
+        // Skip image entirely on decode failure — no reserved gap
       }
-      y += maxHeight + 16;
     }
 
     // Title
