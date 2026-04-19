@@ -12,6 +12,8 @@ const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
 };
 
 export const GET: APIRoute = async (context) => {

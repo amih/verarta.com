@@ -43,6 +43,8 @@ export const ALLOWED_MIME_TYPES = [
   'image/gif',
   'image/webp',
   'image/svg+xml',
+  'image/heic',
+  'image/heif',
   'application/pdf',
   'text/plain',
   'application/json',
