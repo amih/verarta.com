@@ -37,6 +37,7 @@ export const GET: APIRoute = async (context) => {
     // Fetch extras — must be public (hidden=false or null)
     const extrasResult = await query(
       `SELECT ae.title, ae.description_html, ae.creation_date, ae.era, ae.thumbnail_url, ae.hidden,
+              ae.blockchain_tx_id,
               a.name AS artist_name, c.name AS collection_name,
               u.display_name AS owner_display_name, u.username AS owner_username
        FROM artwork_extras ae
@@ -76,6 +77,8 @@ export const GET: APIRoute = async (context) => {
         created_at: new Date(chainArtwork.created_at * 1000).toISOString(),
         owner_display_name: extras.owner_display_name ?? null,
         owner_username: extras.owner_username ?? null,
+        owner_account: chainArtwork.owner ?? null,
+        blockchain_tx_id: extras.blockchain_tx_id ?? null,
       },
     }), {
       status: 200,

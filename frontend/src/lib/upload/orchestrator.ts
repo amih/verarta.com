@@ -7,7 +7,7 @@ import { queryTable } from '@/lib/api/chain';
 import { uint8ToBase64 } from '@/lib/utils/chunking';
 import { useUploadStore } from '@/store/upload';
 import { generateThumbnail, generatePublicThumbnail } from './thumbnail';
-import { uploadPublicThumbnail } from '@/lib/api/profile';
+import { uploadPublicThumbnail, saveArtworkTxId } from '@/lib/api/profile';
 
 /**
  * Wait for an artwork to appear on-chain after createart tx.
@@ -119,7 +119,7 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
       ? btoa(unescape(encodeURIComponent(JSON.stringify(opts.metadata))))
       : '';
 
-    await signAndPushTransaction(
+    const createartResult = await signAndPushTransaction(
       'createart',
       {
         artwork_id: artworkId,
@@ -135,7 +135,15 @@ export async function uploadArtwork(opts: UploadOptions): Promise<{
 
     store.updateProgress(tempId, 1);
 
-    // 3b. Wait for createart to be included in a block before addfile
+    // 3b. Persist the createart tx id so we can show it on the public verify page / COA.
+    // Non-blocking — upload flow continues whether this succeeds or not.
+    if (createartResult.transaction_id) {
+      saveArtworkTxId(artworkId, createartResult.transaction_id).catch((err) => {
+        console.warn('[upload] Failed to save createart tx id:', err);
+      });
+    }
+
+    // 3c. Wait for createart to be included in a block before addfile
     await waitForArtworkOnChain(artworkId, opts.blockchainAccount);
 
     // 4. Sign & push `addfile` tx from browser (encryption metadata on-chain)

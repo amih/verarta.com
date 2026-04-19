@@ -113,6 +113,8 @@ export interface PublicArtworkDetail {
   created_at: string;
   owner_display_name: string | null;
   owner_username: string | null;
+  owner_account: string | null;
+  blockchain_tx_id: string | null;
 }
 
 export async function getPublicArtworkDetail(artworkId: number): Promise<PublicArtworkDetail> {
@@ -120,4 +122,8 @@ export async function getPublicArtworkDetail(artworkId: number): Promise<PublicA
     `/api/artworks/${artworkId}/public`
   );
   return res.data.artwork;
+}
+
+export async function saveArtworkTxId(artworkId: number, txId: string): Promise<void> {
+  await apiClient.put(`/api/artworks/${artworkId}/tx`, { tx_id: txId });
 }
