@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getPublicArtworkDetail } from '@/lib/api/profile';
-import { Loader2, ArrowLeft, FileIcon } from 'lucide-react';
+import { Loader2, ArrowLeft, FileIcon, ShieldCheck, Download } from 'lucide-react';
 import Link from 'next/link';
 
 export default function PublicArtworkDetailPage() {
@@ -126,6 +126,25 @@ export default function PublicArtworkDetailPage() {
               dangerouslySetInnerHTML={{ __html: artwork.description_html }}
             />
           )}
+
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+            <Link
+              href={`/verify/${artworkId}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Verify record
+            </Link>
+            <a
+              href={`${apiUrl}/api/artworks/${artworkId}/coa`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#250D59] px-4 py-2 text-sm font-medium text-white hover:bg-[#1a0940] dark:bg-[#DAA5DE] dark:text-zinc-900 dark:hover:bg-[#c98ed0]"
+            >
+              <Download className="h-4 w-4" />
+              Download Certificate
+            </a>
+          </div>
         </div>
       </div>
     </div>

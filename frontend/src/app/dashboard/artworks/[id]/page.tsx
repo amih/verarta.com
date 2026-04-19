@@ -44,6 +44,8 @@ import {
   Clock,
   Upload,
   Trash2,
+  FileCheck2,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { ImageEditorModal } from '@/components/artwork/ImageEditorModal';
@@ -540,6 +542,29 @@ export default function ArtworkDetailPage() {
                 <ArrowRightLeft className="h-4 w-4" />
                 Transfer
               </button>
+              {!extras?.hidden && (
+                <>
+                  <Link
+                    href={`/verify/${id}`}
+                    target="_blank"
+                    className="flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    title="Open the public verify page"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Public page
+                  </Link>
+                  <a
+                    href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/artworks/${id}/coa`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-lg border border-[#250D59] bg-[#250D59] px-3 py-2 text-sm font-medium text-white hover:bg-[#1a0940] dark:border-[#DAA5DE] dark:bg-[#DAA5DE] dark:text-zinc-900 dark:hover:bg-[#c98ed0]"
+                    title="Download the one-page Certificate of Authenticity"
+                  >
+                    <FileCheck2 className="h-4 w-4" />
+                    Certificate
+                  </a>
+                </>
+              )}
               <button
                 onClick={() => setShowDelete(true)}
                 className="flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
