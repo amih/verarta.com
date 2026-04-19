@@ -185,13 +185,13 @@ function buildPdf(artwork: ArtworkData, thumbnail: Buffer | null, qrDataUrl: str
         width: contentWidth - qrSize - 20,
       });
 
-    // Footer
+    // Footer — keep above page bottom to avoid auto-pagination
     doc.font('Helvetica').fontSize(8).fillColor('#999999')
       .text(
         'This certificate is tamper-proof. The artwork record is stored on the Verarta blockchain and can be independently verified by anyone at the URL above.',
         doc.page.margins.left,
-        pageHeight - doc.page.margins.bottom - 14,
-        { width: contentWidth, align: 'center' }
+        pageHeight - doc.page.margins.bottom - 26,
+        { width: contentWidth, align: 'center', lineBreak: true }
       );
 
     doc.end();
