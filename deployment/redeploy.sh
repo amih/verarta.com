@@ -53,8 +53,20 @@ deploy_backend() {
     "$PROJECT_ROOT/backend/src/" \
     "$SSH_HOST:$BACKEND_DIR/src/"
 
+  log "Syncing backend package.json / package-lock.json / migrations ..."
+  rsync -av \
+    "$PROJECT_ROOT/backend/package.json" \
+    "$PROJECT_ROOT/backend/package-lock.json" \
+    "$SSH_HOST:$BACKEND_DIR/" 2>/dev/null || true
+  rsync -av --delete \
+    "$PROJECT_ROOT/backend/migrations/" \
+    "$SSH_HOST:$BACKEND_DIR/migrations/"
+
   log "Writing VERSION file..."
   ssh "$SSH_HOST" "echo '$APP_VERSION' > $BACKEND_DIR/VERSION"
+
+  log "Installing backend deps on server..."
+  ssh "$SSH_HOST" "cd $BACKEND_DIR && npm install --no-audit --no-fund"
 
   log "Building backend on server..."
   ssh "$SSH_HOST" "cd $BACKEND_DIR && npm run build"

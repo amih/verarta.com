@@ -42,6 +42,7 @@ export default function VerifyArtworkPage() {
   }
 
   const registeredAt = new Date(artwork.created_at);
+  const coaHref = `${apiUrl}/api/artworks/${artworkId}/coa`;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -154,15 +155,15 @@ export default function VerifyArtworkPage() {
           )}
 
           <div className="mt-6 flex flex-wrap gap-2 border-t border-zinc-200 pt-5 dark:border-zinc-800">
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
-              title="Coming soon"
+            <a
+              href={coaHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               <Download className="h-4 w-4" />
-              Download Certificate of Authenticity (coming soon)
-            </button>
+              Download Certificate of Authenticity
+            </a>
           </div>
         </div>
 
